@@ -12,10 +12,10 @@ Antigravity lets you run multiple AI coding agents in parallel — each agent ge
 
 ## Pre-Flight Checklist (Do This Before Spawning Any Agents)
 
-- [ ] Create a new Antigravity project called `eyeguard`
-- [ ] Upload `SPEC.md` to the project root — this is the bible every agent reads
-- [ ] Create an empty `STATUS.md` using the template in SPEC.md Section 18
-- [ ] Run this setup script to scaffold the correct structure:
+- [x] Create a new Antigravity project called `eyeguard`
+- [x] Upload `SPEC.md` to the project root — this is the bible every agent reads
+- [x] Create an empty `STATUS.md` using the template in SPEC.md Section 18
+- [x] Run this setup script to scaffold the correct structure:
   ```bash
   # Extension — plain TypeScript bundled with esbuild (NOT Vite — extensions have no dev server)
   mkdir -p eyehealth/extension/{background,content,popup,cv,engine,correction,prediction,db,icons}
@@ -83,9 +83,9 @@ Rules:
 **What you should get:** `db/schema.ts`, `db/db.ts`, `background/service-worker.ts`
 
 **Review checklist:**
-- [ ] All 6 Dexie tables match SPEC.md Section 12
-- [ ] Service worker handles all 3 message types
-- [ ] No biometric fields in the schema
+- [X] All 6 Dexie tables match SPEC.md Section 12
+- [X] Service worker handles all 3 message types
+- [X] No biometric fields in the schema
 
 ---
 
@@ -122,9 +122,9 @@ After completing, update STATUS.md.
 **What you should get:** `cv/face-mesh.ts`, `cv/blink-detector.ts`
 
 **Review checklist:**
-- [ ] EAR formula matches the landmark indices listed above
-- [ ] No `console.log(landmarks)` anywhere
-- [ ] `processFrame` returns SensorFrame, not raw landmark data
+- [X] EAR formula matches the landmark indices listed above
+- [X] No `console.log(landmarks)` anywhere
+- [X] `processFrame` returns SensorFrame, not raw landmark data
 
 ---
 
