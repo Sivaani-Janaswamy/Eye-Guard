@@ -1,0 +1,57 @@
+# Node and Frontend Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build and Production out
+dist/
+build/
+out/
+.next/
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug and Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.log
+
+# Coverage and Testing
+coverage/
+.cypress/
+
+# Python Backend
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+
+# IDE and OS config
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Extension Specific
+eyehealth/extension/*.zip
+eyehealth/extension/*.crx
