@@ -92,9 +92,18 @@ export class EyeGuardDB extends Dexie {
   correction!:  Table<StoredCorrectionProfile>;
   predictions!: Table<PredictionResult>;
   consent!:     Table<ConsentRecord>;
+  live_stats!:  Table<{ 
+    id: number; 
+    distanceCm: number; 
+    blinkRate: number; 
+    lux: number; 
+    faceDetected: boolean; 
+    updatedAt: number 
+  }>;
 
   constructor() {
     super("EyeGuardDB");
+    
     this.version(1).stores({
       sessions:    "sessionId, startTime, endTime",
       scores:      "date, score, riskLevel",
@@ -102,6 +111,10 @@ export class EyeGuardDB extends Dexie {
       correction:  "id",
       predictions: "generatedAt, horizon",
       consent:     "consentedAt",
+    });
+
+    this.version(2).stores({
+      live_stats: "id"
     });
   }
 }

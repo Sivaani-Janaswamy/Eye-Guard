@@ -12,6 +12,11 @@ function Popup() {
   const [activePreset, setActivePreset] = useState("off");
   const [hasConsent, setHasConsent] = useState<boolean | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  
+  // Real-time Live Stats
+  const [liveStats, setLiveStats] = useState({
+    distanceCm: 0, blinkRate: 0, faceDetected: false
+  });
 
   // Load Initial Data
   useEffect(() => {
@@ -60,6 +65,25 @@ function Popup() {
     loadData();
     const interval = setInterval(loadData, 5000); // Polling simple updates dynamically
     return () => clearInterval(interval);
+  }, []);
+
+  // High-frequency Live Stats Polling
+  useEffect(() => {
+    const poll = setInterval(async () => {
+      try {
+        const live = await (db as any).live_stats.get(1);
+        if (live && Date.now() - live.updatedAt < 8000) {
+          setLiveStats({
+            distanceCm: live.distanceCm,
+            blinkRate:  live.blinkRate,
+            faceDetected: live.faceDetected
+          });
+        } else {
+          setLiveStats({ distanceCm: 0, blinkRate: 0, faceDetected: false });
+        }
+      } catch (e) { /* table not ready yet */ }
+    }, 2000);
+    return () => clearInterval(poll);
   }, []);
 
   const handleGrantConsent = () => {
@@ -131,12 +155,16 @@ function Popup() {
     <div style={{ 
       display: "flex", 
       flexDirection: "column", 
-      height: "100%", 
+      minHeight: "500px",
+      maxHeight: "500px",
+      width: "400px",
       padding: "16px", 
       gap: "16px", 
       backgroundColor: colors.bg, 
       color: colors.text,
-      transition: "background-color 0.3s ease, color 0.3s ease" 
+      transition: "background-color 0.3s ease, color 0.3s ease",
+      overflowY: "auto",
+      boxSizing: "border-box"
     }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -188,11 +216,16 @@ function Popup() {
             border: isDark ? `1px solid ${colors.border}` : "none",
             boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)" 
           }}>
-            <div style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "8px" }}>Current Session</div>
+            <div style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "8px" }}>
+              Current Session {liveStats.faceDetected ? "🟢" : "🔴"}
+            </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
               <div>⏱️ {activeSession ? Math.round((Date.now() - activeSession.startTime) / 60000) : 0}m</div>
-              <div>👀 {activeSession ? Math.round(activeSession.avgBlinkRate) : 0} bpm</div>
-              <div>📏 {activeSession ? Math.round(activeSession.avgDistanceCm) : 0} cm</div>
+              <div>👀 {liveStats.blinkRate} bpm</div>
+              <div>📏 {liveStats.distanceCm} cm</div>
+            </div>
+            <div style={{ fontSize: "10px", color: colors.subtext, textAlign: "center", marginTop: "4px" }}>
+              {liveStats.faceDetected ? 'Tracking' : 'No face detected'}
             </div>
           </div>
 

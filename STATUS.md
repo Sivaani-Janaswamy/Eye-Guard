@@ -28,6 +28,20 @@
 - **General**: Full end-to-end monitoring pipeline integrated (`overlay.ts` -> `service-worker.ts` -> `SessionTracker`/`AlertEngine`). Real-time UI feedback via snackbars added.
 - **General**: Resolved persistent MediaPipe 404s by implementing a global Network Interceptor in `overlay.ts` that hijacks and redirects relative asset fetches to the extension origin.
 
+## Recent Fixes (2026-04-19)
+
+### Service Worker & Monitoring Loop
+- **Loop Stabilization**: Implemented tab-visibility pausing in `main-world.ts`, preventing sessions from dying when users switch tabs or open DevTools.
+- **Fail-Safe Processing**: Guarded the processing loop with `try-catch` and loop-exit logging to ensure continuous tracking.
+- **Persistence Verification**: Added stack traces to all stop-monitoring triggers to ensure no silent shutdowns.
+- **Diagnostic Panel**: Deployed a live `CameraTest` component to the dashboard for end-to-end pipeline validation (FPS, Distance, Blink).
+
+### AI Pipeline & Scoring
+- **Implemented rAF loop**: MediaPipe FaceMesh now receives frames via `requestAnimationFrame` for consistent processing.
+- **Session Lifecycle established**: Added `START_SESSION` handshake between overlay and service worker to ensure DB records exist before sensor data arrival.
+- **Data Persistence & Buffering**: Service Worker now buffers frames and updates high-level session metrics every 50 frames.
+- **Real-time Scoring**: Implemented a periodic `RECOMPUTE_SCORE` alarm (1 minute) to ensure the health score reflects active monitoring data.
+
 ## BLOCKERS
 <!-- Log anything blocking progress -->
 

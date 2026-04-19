@@ -1,11 +1,9 @@
 import { AlertEvent } from "../db/schema";
-import { FaceMeshProcessor } from "../cv/face-mesh";
 import { applyCorrection, removeCorrection } from "../correction/display-corrector";
 
 // State pointers
 let videoElement: HTMLVideoElement | null = null;
 let captureInterval: number | null = null;
-let faceMeshProcessor: FaceMeshProcessor | null = null;
 let cameraRunning = false;
 let hudElement: HTMLDivElement | null = null;
 let hudAccentBar: HTMLDivElement | null = null;
@@ -13,6 +11,9 @@ let hudContent: HTMLDivElement | null = null;
 let isHudMinimized = false;
 let hudIconElement: HTMLDivElement | null = null;
 let currentTheme: 'light' | 'dark' = 'light';
+let websiteStyleElement: HTMLStyleElement | null = null;
+let hudPos = { top: 20, left: 20 };
+let keepaliveInterval: any = null;
 
 /**
  * Injects a floating alert notification into the corner of the active webpage payload window.
@@ -167,8 +168,8 @@ function injectStatusHUD(): void {
   // Style the main container (Pastel White)
   Object.assign(hudElement.style, {
     position: "fixed",
-    top: "20px",
-    left: "20px",
+    top: `${hudPos.top}px`,
+    left: `${hudPos.left}px`,
     width: "320px",
     backgroundColor: currentTheme === 'dark' ? "rgba(26, 26, 26, 0.98)" : "#FFFFFF",
     borderRadius: "8px",
@@ -177,9 +178,12 @@ function injectStatusHUD(): void {
     display: "flex",
     overflow: "hidden",
     fontFamily: "'Inter', -apple-system, sans-serif",
-    transition: "transform 0.3s ease, opacity 0.3s ease, background-color 0.3s ease",
-    border: currentTheme === 'dark' ? "1px solid #333333" : "1px solid #E0E0E0"
+    transition: "transform 0.3s ease, opacity 0.3s ease, background-color 0.3s ease, border-color 0.3s ease",
+    border: currentTheme === 'dark' ? "1px solid #333333" : "1px solid #E0E0E0",
+    cursor: "default"
   });
+
+  makeDraggable(hudElement);
 
   // Accent Bar (Left side)
   hudAccentBar = document.createElement("div");
@@ -235,6 +239,26 @@ function injectStatusHUD(): void {
 
   hudContent.appendChild(header);
   hudContent.appendChild(message);
+  
+  // Status Badge (Fix 3)
+  const badge = document.createElement('div');
+  badge.id = 'eyeguard-status-badge';
+  badge.style.cssText = `
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #E6F1FB;
+    color: #0C447C;
+    font-family: sans-serif;
+    white-space: nowrap;
+    transition: background 0.3s, color 0.3s;
+    margin-top: 4px;
+    display: inline-block;
+    align-self: flex-start;
+  `;
+  badge.textContent = 'Initializing...';
+  hudContent.appendChild(badge);
+
   hudElement.appendChild(hudAccentBar);
   hudElement.appendChild(hudContent);
   
@@ -252,12 +276,20 @@ function injectStatusIcon(): void {
 
   hudIconElement = document.createElement("div");
   hudIconElement.id = "eyeguard-hud-icon";
-  hudIconElement.innerHTML = "👁️";
+  
+  const iconImg = document.createElement("img");
+  iconImg.src = chrome.runtime.getURL("icons/icon48.png");
+  Object.assign(iconImg.style, {
+    width: "28px",
+    height: "28px",
+    objectFit: "contain"
+  });
+  hudIconElement.appendChild(iconImg);
   
   Object.assign(hudIconElement.style, {
     position: "fixed",
-    top: "20px",
-    left: "20px",
+    top: `${hudPos.top}px`,
+    left: `${hudPos.left}px`,
     width: "48px",
     height: "48px",
     backgroundColor: "#FFFFFF",
@@ -274,7 +306,95 @@ function injectStatusIcon(): void {
   });
 
   hudIconElement.onclick = toggleHUD;
+  makeDraggable(hudIconElement);
   (document.body || document.documentElement).appendChild(hudIconElement);
+}
+
+/**
+ * Makes an element draggable on the screen with smooth physics and shared state.
+ */
+function makeDraggable(el: HTMLElement) {
+    let offsetX = 0, offsetY = 0;
+    
+    el.onmousedown = (e: MouseEvent) => {
+        if (e.button !== 0) return; // Left click only
+        e.preventDefault();
+        
+        // Calculate the "grab point" offset relative to the element's top-left
+        const rect = el.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        
+        document.onmousemove = elementDrag;
+        document.onmouseup = closeDragElement;
+        
+        el.style.transition = "none";
+        el.style.cursor = "grabbing";
+    };
+
+    function elementDrag(e: MouseEvent) {
+        e.preventDefault();
+        
+        // New position based on mouse - grab offset
+        let newX = e.clientX - offsetX;
+        let newY = e.clientY - offsetY;
+        
+        // Viewport boundaries
+        const padding = 10;
+        newX = Math.max(padding, Math.min(newX, window.innerWidth - el.offsetWidth - padding));
+        newY = Math.max(padding, Math.min(newY, window.innerHeight - el.offsetHeight - padding));
+        
+        // Update global state
+        hudPos.top = newY;
+        hudPos.left = newX;
+        
+        // Sync both UI elements immediately
+        if (hudElement) {
+            hudElement.style.top = `${newY}px`;
+            hudElement.style.left = `${newX}px`;
+        }
+        if (hudIconElement) {
+            hudIconElement.style.top = `${newY}px`;
+            hudIconElement.style.left = `${newX}px`;
+        }
+    }
+
+    function closeDragElement() {
+        document.onmousemove = null;
+        document.onmouseup = null;
+        el.style.transition = "transform 0.3s ease, opacity 0.3s ease, background-color 0.3s ease, border-color 0.3s ease";
+        el.style.cursor = "default";
+    }
+}
+
+/**
+ * Applies a global high-contrast dark filter to the entire webpage.
+ */
+function updateWebsiteTheme(): void {
+    if (currentTheme === 'dark') {
+        if (!websiteStyleElement) {
+            websiteStyleElement = document.createElement("style");
+            websiteStyleElement.id = "eyeguard-dark-mode";
+            websiteStyleElement.innerHTML = `
+                html {
+                    filter: invert(0.9) hue-rotate(180deg) !important;
+                    background: #fff !important; /* Ensure base is white for better inversion */
+                }
+                /* Protect media and EyeGuard UI from inversion */
+                img, video, iframe, canvas, 
+                #eyeguard-hud, #eyeguard-hud-icon,
+                [style*="background-image"] {
+                    filter: invert(1.1) hue-rotate(180deg) !important;
+                }
+            `;
+            (document.head || document.documentElement).appendChild(websiteStyleElement);
+        }
+    } else {
+        if (websiteStyleElement) {
+            websiteStyleElement.remove();
+            websiteStyleElement = null;
+        }
+    }
 }
 
 /**
@@ -287,9 +407,15 @@ function toggleHUD(): void {
   if (isHudMinimized) {
     hudElement.style.display = "none";
     hudIconElement.style.display = "flex";
+    // Sync position
+    hudIconElement.style.top = `${hudPos.top}px`;
+    hudIconElement.style.left = `${hudPos.left}px`;
   } else {
     hudElement.style.display = "flex";
     hudIconElement.style.display = "none";
+    // Sync position
+    hudElement.style.top = `${hudPos.top}px`;
+    hudElement.style.left = `${hudPos.left}px`;
   }
 }
 
@@ -327,6 +453,52 @@ function updateStatusHUD(level: 'info' | 'success' | 'warning' | 'error' | 'noti
   // Dynamic update for background
   hudElement.style.backgroundColor = currentTheme === 'dark' ? "rgba(26, 26, 26, 0.98)" : "#FFFFFF";
   hudIconElement.style.backgroundColor = currentTheme === 'dark' ? "#1E1E1E" : "#FFFFFF";
+
+  // Update Website Theme
+  updateWebsiteTheme();
+}
+
+/**
+ * Updates the HUD status badge with real-time detection data (Fix 3).
+ */
+function updateHudStatus(frame: any) {
+  const badge = document.getElementById('eyeguard-status-badge');
+  if (!badge) return;
+
+  if (!frame.faceDetected) {
+    badge.textContent = 'No face detected';
+    badge.style.background = '#FAEEDA';
+    badge.style.color = '#633806';
+    return;
+  }
+
+  const dist = Math.round(frame.screenDistanceCm);
+  const blink = Math.round(frame.blinkRate);
+  badge.textContent = `${dist}cm · ${blink}/min`;
+  badge.style.background = dist < 50 ? '#FCEBEB' : '#EAF3DE';
+  badge.style.color = dist < 50 ? '#791F1F' : '#27500A';
+}
+
+function startKeepalive() {
+  if (keepaliveInterval) return;
+  console.log('[EyeGuard:overlay] Starting keepalive heartbeat');
+  keepaliveInterval = setInterval(() => {
+    chrome.runtime.sendMessage({ type: 'KEEPALIVE' })
+      .catch(() => {
+        // SW woke up from sleep — restart session only (Fix Cause 3)
+        console.log('[EyeGuard:overlay] SW was sleeping, restarting session');
+        startSession(); 
+      });
+  }, 25000);
+}
+
+function stopKeepalive() {
+  if (keepaliveInterval) {
+    console.log('[EyeGuard:overlay] STOP keepalive called from:', new Error().stack);
+    clearInterval(keepaliveInterval);
+    keepaliveInterval = null;
+    console.log('[EyeGuard:overlay] Stopped keepalive heartbeat');
+  }
 }
 
 /**
@@ -336,9 +508,19 @@ function updateStatusHUD(level: 'info' | 'success' | 'warning' | 'error' | 'noti
 function injectMainInterceptor(): void {
   const script = document.createElement('script');
   script.src = chrome.runtime.getURL('dist/main-world.js');
-  script.setAttribute('data-extension-id', chrome.runtime.id);
+  script.setAttribute('data-ext-id', chrome.runtime.id);
   (document.head || document.documentElement).appendChild(script);
   console.log('[EyeGuard] Main-world interceptor injected via script tag');
+}
+
+/**
+ * Signals the service worker to begin a tracking session.
+ */
+function startSession() {
+  chrome.runtime.sendMessage({
+    type: 'START_SESSION',
+    payload: { platform: 'chrome-extension' }
+  }).catch(() => {});
 }
 
 async function checkConsent(): Promise<boolean> {
@@ -380,54 +562,16 @@ async function initializeCameraLoop() {
         videoElement.onloadedmetadata = () => resolve(true);
     });
 
-    // Load Mesh Processor securely
-    try {
-      faceMeshProcessor = new FaceMeshProcessor();
-      // Test the initialization path
-      updateStatusHUD('info', "Calculating distance and optimizing vision... Please hold still.");
-    } catch (e) {
-      console.error("[EyeGuard] AI Engine Error:", e);
-      updateStatusHUD('error', "AI LOADING FAILED: Model assets blocked or missing. Please reload.");
-      return;
+    // Bridge logic: Send video playback state to main-world via just being in DOM
+    if (videoElement) {
+        console.log('[EyeGuard] Monitoring loop starting via Main World bridge');
+        videoElement.play().then(() => {
+            startSession();
+            startKeepalive();
+        }).catch(() => {
+            console.warn("[EyeGuard] Video play failed, might need user interaction");
+        });
     }
-
-    // Start 5 fps polling hook
-    let lastFaceState = false;
-
-    captureInterval = window.setInterval(async () => {
-      if (!videoElement || !faceMeshProcessor) return;
-      
-      try {
-        const frameData = await faceMeshProcessor.processFrame(videoElement);
-        
-        // Update HUD based on frame state
-        if (frameData.faceDetected) {
-            if (frameData.screenDistanceCm < 50) {
-                updateStatusHUD('warning', `POSTURE ALERT: Leaning too close. Please move back (Target: 50cm+, Current: ${Math.round(frameData.screenDistanceCm)}cm).`);
-            } else {
-                updateStatusHUD('success', `Tracking Active: Optimal posture detected [${Math.round(frameData.screenDistanceCm)}cm]. EyeGuard is protecting your vision.`);
-            }
-        } else {
-            updateStatusHUD('notice', "Searching: No face detected. Please align yourself with the camera to continue tracking.");
-        }
-
-        // UX logic: Notify console of detection transitions
-        if (frameData.faceDetected !== lastFaceState) {
-          lastFaceState = frameData.faceDetected;
-          console.log(lastFaceState ? '[EyeGuard] Face detected' : '[EyeGuard] Face lost - searching...');
-        }
-
-        // Send resulting SensorFrame to service worker
-        chrome.runtime.sendMessage({ type: "SENSOR_FRAME", payload: frameData }).catch(() => {});
-      } catch (err) {
-          // Check for CSP block or model load failure
-          if (err.toString().includes('is not a valid') || err.toString().includes('Script error')) {
-            updateStatusHUD('error', "SECURITY BLOCK: This website is preventing EyeGuard from loading AI assets.");
-          }
-      }
-      
-    }, 200);
-    console.log('[EyeGuard] Monitoring loop started');
 
   } catch (err: any) {
     console.error("EyeGuard Camera Initialization Error:", err);
@@ -444,6 +588,7 @@ async function initializeCameraLoop() {
  */
 function stopCameraLoop() {
   if (!cameraRunning) return;
+  console.log('[EyeGuard:overlay] STOP camera loop called from:', new Error().stack);
   
   if (captureInterval) {
     clearInterval(captureInterval);
@@ -457,6 +602,7 @@ function stopCameraLoop() {
   }
 
   cameraRunning = false;
+  stopKeepalive();
   updateStatusHUD('notice', "Camera Switched Off. Monitoring paused.");
   console.log('[EyeGuard] Monitoring loop stopped');
 }
@@ -468,7 +614,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'CONSENT_GRANTED') {
     initializeCameraLoop(); // idempotent guard inside prevents double-start
   }
-  if (message.type === 'STOP_CAMERA') {
+  if (message.type === 'STOP_CAMERA' || message.type === 'STOP_MONITORING') {
+    console.log('[EyeGuard:overlay] STOP message received:', message.type);
     stopCameraLoop();
   }
   if (message.type === 'SHOW_ALERT') {
@@ -489,6 +636,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+// Bridge: Receive frames from Main World
+window.addEventListener('message', (event) => {
+  if (event.source !== window) return;
+  if (event.data?.type !== 'EYEGUARD_FRAME') return;
+
+  const frameData = event.data.payload;
+
+  // Update HUD badge immediately — no SW round trip needed (Fix 3)
+  updateHudStatus(frameData);
+
+  // Update HUD text feedback
+  if (frameData.faceDetected) {
+      if (frameData.screenDistanceCm < 50) {
+          updateStatusHUD('warning', `POSTURE ALERT: Leaning too close. Please move back (Current: ${Math.round(frameData.screenDistanceCm)}cm).`);
+      } else {
+          updateStatusHUD('success', `Tracking Active: Optimal posture detected [${Math.round(frameData.screenDistanceCm)}cm].`);
+      }
+  } else {
+      updateStatusHUD('notice', "Searching: No face detected. Align with camera.");
+  }
+
+  // Forward to service worker
+  chrome.runtime.sendMessage({ type: "SENSOR_FRAME", payload: frameData }).catch(() => {});
+
+  // Log every 5 seconds so console isn't flooded
+  if (Date.now() % 5000 < 200) {
+    console.log('[EyeGuard:overlay] Frame forwarded:',
+        'dist:', Math.round(frameData.screenDistanceCm),
+        'blink:', Math.round(frameData.blinkRate),
+        'face:', frameData.faceDetected);
+  }
+});
+
 // Bootstrapper hook
 (async () => {
   // 0. Inject Main-world interceptor via script tag injection
@@ -501,6 +681,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // 2. Initialize Status HUD
   injectStatusHUD();
+  updateWebsiteTheme();
   updateStatusHUD('info', "[EyeGuard] System check... verifying permissions.");
 
   const alreadyGranted = await checkConsent();

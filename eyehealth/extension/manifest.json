@@ -53,7 +53,13 @@
         "dist/cv/*.wasm",
         "dist/cv/*.data",
         "dist/cv/*.binarypb",
-        "dashboard/*"
+        "icons/*.png",
+        "vendor/mediapipe/*.js",
+        "vendor/mediapipe/*.wasm",
+        "vendor/mediapipe/*.data",
+        "vendor/mediapipe/*.tflite",
+        "vendor/*.js",
+        "vendor/*.wasm"
       ],
       "matches": ["<all_urls>"]
     }

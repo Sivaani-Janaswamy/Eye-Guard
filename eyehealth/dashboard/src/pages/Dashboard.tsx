@@ -1,96 +1,82 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@extension/db/db';
-import type { DailyEyeScore, AlertEvent, PredictionResult } from '@extension/db/schema';
+import type { PredictionResult, AlertEvent } from '@extension/db/schema';
 import { ScoreCard } from '../components/ScoreCard';
 import { TrendChart } from '../components/TrendChart';
+import { PredictionCard } from '../components/PredictionCard';
 import { AlertFeed } from '../components/AlertFeed';
 import { CorrectionPanel } from '../components/CorrectionPanel';
-import { PredictionCard } from '../components/PredictionCard';
+import CameraTest from '../components/CameraTest';
 
 export default function Dashboard() {
   const [isDemoData, setIsDemoData] = useState(false);
-  const [todayScore, setTodayScore] = useState<DailyEyeScore | null>(null);
-  const [history, setHistory] = useState<DailyEyeScore[]>([]);
-  const [alerts, setAlerts] = useState<AlertEvent[]>([]);
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  // Load standard hook data
-  useEffect(() => {
-    const loadRealData = async () => {
+  // Reactive Data Queries
+  const scores = useLiveQuery(() => db.scores.orderBy('date').reverse().toArray());
+  const alerts = useLiveQuery(() => db.alerts.orderBy('triggeredAt').reverse().limit(10).toArray()) || [];
+  const liveStats = useLiveQuery(
+    async () => {
       try {
-        const scores = await db.scores.orderBy('date').reverse().toArray();
-        const recentAlerts = await db.alerts.orderBy('triggeredAt').reverse().limit(10).toArray();
-        const latestPrediction = await db.predictions.orderBy('generatedAt').reverse().first();
+        return await (db as any).live_stats.get(1);
+      } catch { return null; }
+    }
+  );
 
-        if (scores.length > 0) {
-          setIsDemoData(false);
-          setTodayScore(scores[0]);
-          setHistory([...scores].reverse().slice(-30)); // Ensure chronological limit
-          setAlerts(recentAlerts);
-          if (latestPrediction) setPrediction(latestPrediction);
-          return true;
-        }
-      } catch (err) {
-        console.warn("DB Access blocked or empty", err);
-      }
-      return false;
-    };
-
-    const injectDemoData = () => {
-      setIsDemoData(true);
-      const demoHistory: DailyEyeScore[] = Array.from({ length: 30 }).map((_, i) => ({
-        date: new Date(Date.now() - (29 - i) * 86400000).toISOString().split('T')[0],
-        score: Math.floor(Math.random() * 40 + 40), // Random 40-80
-        breakdown: { screenTimeScore: 10, distanceScore: 10, blinkScore: 10, lightingScore: 10 },
-        riskLevel: "moderate",
-        myopiaRiskFlag: false,
-        totalScreenMinutes: 400
-      }));
-      setHistory(demoHistory);
-      setTodayScore(demoHistory[demoHistory.length - 1]);
-
-      setAlerts([{
-        alertId: "demo-1",
-        type: "distance",
-        severity: "warning",
-        triggeredAt: Date.now() - 3600000,
-        dismissed: false,
-        snoozedUntil: null,
-        message: "You're too close to the screen — try moving back a bit",
-        actionTaken: null
-      }]);
-
-      setPrediction({
-        generatedAt: Date.now(),
-        horizon: "7d",
-        predictedRiskLevel: "moderate",
-        confidence: "Early estimate" as unknown as number,
-        trendSlope: -1.2,
-        keyFactors: [
-          "Blink rate averaged 11 bpm this week (target: 15+)",
-          "Screen distance below 45cm on 5 of the last 7 days",
-          "Daily score dropped 8 points over the past week"
-        ],
-        recommendation: "Increase break frequency and maintain 50cm+ screen distance",
-        disclaimer: "This is a habit trend indicator, not medical advice."
-      });
-    };
-
-    loadRealData().then(hasData => {
-      if (!hasData) injectDemoData();
-      setLoading(false);
+  // Prediction load (not reactive as it changes slowly)
+  useEffect(() => {
+    db.predictions.orderBy('generatedAt').reverse().first().then(p => {
+      if (p) setPrediction(p);
     });
-
-    const poller = setInterval(() => {
-      loadRealData();
-    }, 10000); // Polling dynamically refreshes charts when DB changes
-
-    return () => clearInterval(poller);
   }, []);
 
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center font-bold text-white/50">Waking up Engine...</div>;
+  // Sync Logic Derived from Live Queries
+  const todayScore = (scores && scores.length > 0) ? scores[0] : null;
+  const history = (scores && scores.length > 0) ? [...scores].reverse().slice(-30) : [];
+
+  const displayHistory = history.length > 0 ? history : generateDemoHistory();
+  const displayScore = todayScore || displayHistory[displayHistory.length - 1];
+  const displayAlerts = (alerts && alerts.length > 0) ? alerts : (isDemoData ? generateDemoAlerts() : []);
+
+  useEffect(() => {
+    if (scores && scores.length > 0) {
+      setIsDemoData(false);
+    } else if (scores && scores.length === 0) {
+      setIsDemoData(true);
+    }
+  }, [scores]);
+
+  function generateDemoHistory() {
+    return Array.from({ length: 30 }).map((_, i) => ({
+      date: new Date(Date.now() - (29 - i) * 86400000).toISOString().split('T')[0],
+      score: Math.floor(Math.random() * 40 + 40),
+      breakdown: { screenTimeScore: 10, distanceScore: 10, blinkScore: 10, lightingScore: 10 },
+      riskLevel: "moderate" as const,
+      myopiaRiskFlag: false,
+      totalScreenMinutes: 400
+    }));
+  }
+
+  function generateDemoAlerts(): AlertEvent[] {
+    return [{
+      alertId: "demo-1",
+      type: "distance",
+      severity: "warning",
+      triggeredAt: Date.now() - 3600000,
+      dismissed: false,
+      snoozedUntil: null,
+      message: "Demo: Distance tracking example message",
+      actionTaken: null
+    }];
+  }
+
+  const liveDistance = (liveStats && liveStats.faceDetected && (Date.now() - liveStats.updatedAt < 10000))
+    ? `${Math.round(liveStats.distanceCm)}cm` 
+    : "Searching...";
+
+  if (scores === undefined) {
+    return <div className="min-h-screen flex items-center justify-center font-bold text-white/50 animate-pulse">Connecting to EyeGuard Engine...</div>;
   }
 
   return (
@@ -98,7 +84,7 @@ export default function Dashboard() {
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">EyeGuard Dashboard</h1>
-          <p className="text-white/50 text-sm mt-1">Holistic tracking map for optical longevity.</p>
+          <p className="text-white/50 text-sm mt-1">Holistic tracking map for optical longevity. (Distance: <span className="text-indigo-400 font-mono">{liveDistance}</span>)</p>
         </div>
         
         {isDemoData && (
@@ -107,17 +93,18 @@ export default function Dashboard() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
             </span>
-            Demo data — connect the extension to see real stats
+            Demo data — Tracking loop is currently inactive
           </div>
         )}
       </header>
+      <CameraTest />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* Left Column: Immediate status & Predictions */}
         <div className="lg:col-span-4 flex flex-col gap-8">
           <div className="h-[380px]">
-             <ScoreCard scoreData={todayScore} />
+             <ScoreCard scoreData={displayScore} />
           </div>
           <div className="h-[280px]">
              {prediction && <PredictionCard prediction={prediction} />}
@@ -129,12 +116,12 @@ export default function Dashboard() {
           
           {/* Top Section: Charts */}
           <div className="h-[380px]">
-            <TrendChart scores={history} />
+            <TrendChart scores={displayHistory} />
           </div>
 
           {/* Bottom Section: Feed and Controls split */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-[380px]">
-            <AlertFeed alerts={alerts} />
+            <AlertFeed alerts={displayAlerts} />
             <CorrectionPanel />
           </div>
 

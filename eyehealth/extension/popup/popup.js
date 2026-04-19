@@ -27696,6 +27696,9 @@
             predictions: "generatedAt, horizon",
             consent: "consentedAt"
           });
+          this.version(2).stores({
+            live_stats: "id"
+          });
         }
       };
     }
@@ -27739,6 +27742,11 @@
         const [activePreset, setActivePreset] = (0, import_react.useState)("off");
         const [hasConsent, setHasConsent] = (0, import_react.useState)(null);
         const [theme, setTheme] = (0, import_react.useState)("light");
+        const [liveStats, setLiveStats] = (0, import_react.useState)({
+          distanceCm: 0,
+          blinkRate: 0,
+          faceDetected: false
+        });
         (0, import_react.useEffect)(() => {
           const loadData = async () => {
             const consentCount = await db.consent.count();
@@ -27773,6 +27781,24 @@
           loadData();
           const interval = setInterval(loadData, 5e3);
           return () => clearInterval(interval);
+        }, []);
+        (0, import_react.useEffect)(() => {
+          const poll = setInterval(async () => {
+            try {
+              const live = await db.live_stats.get(1);
+              if (live && Date.now() - live.updatedAt < 8e3) {
+                setLiveStats({
+                  distanceCm: live.distanceCm,
+                  blinkRate: live.blinkRate,
+                  faceDetected: live.faceDetected
+                });
+              } else {
+                setLiveStats({ distanceCm: 0, blinkRate: 0, faceDetected: false });
+              }
+            } catch (e) {
+            }
+          }, 2e3);
+          return () => clearInterval(poll);
         }, []);
         const handleGrantConsent = () => {
           chrome.runtime.sendMessage({ type: "GRANT_CONSENT" }, (response) => {
@@ -27834,12 +27860,16 @@
         return /* @__PURE__ */ import_react.default.createElement("div", { style: {
           display: "flex",
           flexDirection: "column",
-          height: "100%",
+          minHeight: "500px",
+          maxHeight: "500px",
+          width: "400px",
           padding: "16px",
           gap: "16px",
           backgroundColor: colors.bg,
           color: colors.text,
-          transition: "background-color 0.3s ease, color 0.3s ease"
+          transition: "background-color 0.3s ease, color 0.3s ease",
+          overflowY: "auto",
+          boxSizing: "border-box"
         } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement("h2", { style: { margin: 0, fontSize: "18px" } }, "EyeGuard"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: "12px", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement(
           "span",
           {
@@ -27861,7 +27891,7 @@
           borderRadius: "8px",
           border: isDark ? `1px solid ${colors.border}` : "none",
           boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)"
-        } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", marginBottom: "8px" } }, "Current Session"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px" } }, /* @__PURE__ */ import_react.default.createElement("div", null, "\u23F1\uFE0F ", activeSession ? Math.round((Date.now() - activeSession.startTime) / 6e4) : 0, "m"), /* @__PURE__ */ import_react.default.createElement("div", null, "\u{1F440} ", activeSession ? Math.round(activeSession.avgBlinkRate) : 0, " bpm"), /* @__PURE__ */ import_react.default.createElement("div", null, "\u{1F4CF} ", activeSession ? Math.round(activeSession.avgDistanceCm) : 0, " cm"))), /* @__PURE__ */ import_react.default.createElement("div", { style: {
+        } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", marginBottom: "8px" } }, "Current Session ", liveStats.faceDetected ? "\u{1F7E2}" : "\u{1F534}"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px" } }, /* @__PURE__ */ import_react.default.createElement("div", null, "\u23F1\uFE0F ", activeSession ? Math.round((Date.now() - activeSession.startTime) / 6e4) : 0, "m"), /* @__PURE__ */ import_react.default.createElement("div", null, "\u{1F440} ", liveStats.blinkRate, " bpm"), /* @__PURE__ */ import_react.default.createElement("div", null, "\u{1F4CF} ", liveStats.distanceCm, " cm")), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "10px", color: colors.subtext, textAlign: "center", marginTop: "4px" } }, liveStats.faceDetected ? "Tracking" : "No face detected")), /* @__PURE__ */ import_react.default.createElement("div", { style: {
           background: colors.card,
           padding: "12px",
           borderRadius: "8px",

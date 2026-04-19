@@ -15,7 +15,7 @@ export function TrendChart({ scores }: { scores: DailyEyeScore[] }) {
         30-Day Score Trend
       </h3>
       
-      <div className="flex-1 w-full min-h-[200px]">
+      <div style={{ width: '100%', height: 220 }}>
         {data.length === 0 ? (
           <div className="h-full flex items-center justify-center text-white/40 text-sm">
             Insufficient data for chart
