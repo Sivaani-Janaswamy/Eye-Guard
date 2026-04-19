@@ -11,6 +11,7 @@ function Popup() {
   const [showSettings, setShowSettings] = useState(false);
   const [activePreset, setActivePreset] = useState("off");
   const [hasConsent, setHasConsent] = useState<boolean | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   // Load Initial Data
   useEffect(() => {
@@ -50,6 +51,10 @@ function Popup() {
       if (correctionProfileObj && correctionProfileObj.activePreset) {
         setActivePreset(correctionProfileObj.activePreset);
       }
+
+      // 4. Load Theme
+      const settings = await chrome.storage.local.get("theme");
+      if (settings.theme) setTheme(settings.theme);
     };
     
     loadData();
@@ -91,21 +96,59 @@ function Popup() {
       }
     });
   };
+  
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    chrome.storage.local.set({ theme: newTheme });
+    // Inform active tabs to update HUD theme
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        if (tab.id) chrome.tabs.sendMessage(tab.id, { type: "THEME_CHANGED", theme: newTheme }).catch(() => {});
+      });
+    });
+  };
+
+  const isDark = theme === "dark";
+  const colors = {
+    bg: isDark ? "#121212" : "#f8f9fa",
+    card: isDark ? "#1e1e1e" : "#ffffff",
+    text: isDark ? "#e0e0e0" : "#333333",
+    subtext: isDark ? "#aaaaaa" : "#666666",
+    border: isDark ? "#333333" : "#eeeeee",
+    accent: "#6366f1"
+  };
 
   if (hasConsent === null) {
     return <div style={{ padding: "32px", textAlign: "center", color: "#666" }}>Initialising...</div>;
   }
 
   if (!hasConsent) {
-    return <ConsentScreen onAllow={handleGrantConsent} />;
+    return <ConsentScreen onAllow={handleGrantConsent} isDark={isDark} colors={colors} />;
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "16px", gap: "16px" }}>
+    <div style={{ 
+      display: "flex", 
+      flexDirection: "column", 
+      height: "100%", 
+      padding: "16px", 
+      gap: "16px", 
+      backgroundColor: colors.bg, 
+      color: colors.text,
+      transition: "background-color 0.3s ease, color 0.3s ease" 
+    }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h2 style={{ margin: 0, fontSize: "18px" }}>EyeGuard</h2>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          <span 
+            style={{ cursor: "pointer", fontSize: "18px", userSelect: "none" }} 
+            onClick={toggleTheme}
+            title={`Switch to ${isDark ? "Light" : "Dark"} Mode`}
+          >
+            {isDark ? "☀️" : "🌙"}
+          </span>
           <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", cursor: "pointer" }}>
             <input type="checkbox" checked={isMonitoring} onChange={handleToggleMonitoring} /> Active
           </label>
@@ -116,22 +159,35 @@ function Popup() {
       {!showSettings ? (
         <>
           {/* Main Score UI */}
-          <div style={{ textAlign: "center", padding: "12px", background: "white", borderRadius: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-            <div style={{ fontSize: "14px", color: "#666" }}>Today's EyeScore</div>
+          <div style={{ 
+            textAlign: "center", 
+            padding: "12px", 
+            background: colors.card, 
+            borderRadius: "8px", 
+            boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)",
+            border: isDark ? `1px solid ${colors.border}` : "none"
+          }}>
+            <div style={{ fontSize: "14px", color: colors.subtext }}>Today's EyeScore</div>
             <div style={{ fontSize: "64px", fontWeight: "bold", color: getScoreColor(scoreData?.score || 100), lineHeight: "1.1" }}>
               {scoreData?.score || 100}
             </div>
             
             <div style={{ marginTop: "12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-              <ProgressItem label="Screen Time" value={scoreData?.breakdown.screenTimeScore || 25} max={25} />
-              <ProgressItem label="Distance" value={scoreData?.breakdown.distanceScore || 25} max={25} />
-              <ProgressItem label="Blinks" value={scoreData?.breakdown.blinkScore || 25} max={25} />
-              <ProgressItem label="Lighting" value={scoreData?.breakdown.lightingScore || 25} max={25} />
+              <ProgressItem label="Screen Time" value={scoreData?.breakdown.screenTimeScore || 25} max={25} isDark={isDark} colors={colors} />
+              <ProgressItem label="Distance" value={scoreData?.breakdown.distanceScore || 25} max={25} isDark={isDark} colors={colors} />
+              <ProgressItem label="Blinks" value={scoreData?.breakdown.blinkScore || 25} max={25} isDark={isDark} colors={colors} />
+              <ProgressItem label="Lighting" value={scoreData?.breakdown.lightingScore || 25} max={25} isDark={isDark} colors={colors} />
             </div>
           </div>
 
           {/* Current Session Stats */}
-          <div style={{ background: "white", padding: "12px", borderRadius: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+          <div style={{ 
+            background: colors.card, 
+            padding: "12px", 
+            borderRadius: "8px", 
+            border: isDark ? `1px solid ${colors.border}` : "none",
+            boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)" 
+          }}>
             <div style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "8px" }}>Current Session</div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
               <div>⏱️ {activeSession ? Math.round((Date.now() - activeSession.startTime) / 60000) : 0}m</div>
@@ -141,7 +197,13 @@ function Popup() {
           </div>
 
           {/* Quick Correction */}
-          <div style={{ background: "white", padding: "12px", borderRadius: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+          <div style={{ 
+            background: colors.card, 
+            padding: "12px", 
+            borderRadius: "8px", 
+            border: isDark ? `1px solid ${colors.border}` : "none",
+            boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)" 
+          }}>
             <div style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "8px" }}>Display Correction</div>
             <div style={{ display: "flex", gap: "8px" }}>
               {(["off", "office", "night"] as const).map(preset => (
@@ -150,9 +212,10 @@ function Popup() {
                   onClick={() => handleCorrectionPreset(preset)}
                   style={{
                     flex: 1, padding: "8px", border: "none", borderRadius: "4px",
-                    background: activePreset === preset ? "#007bff" : "#f1f1f1",
-                    color: activePreset === preset ? "white" : "#333",
-                    cursor: "pointer", textTransform: "capitalize", fontSize: "12px"
+                    background: activePreset === preset ? colors.accent : (isDark ? "#2a2a2a" : "#f1f1f1"),
+                    color: activePreset === preset ? "white" : colors.text,
+                    cursor: "pointer", textTransform: "capitalize", fontSize: "12px",
+                    transition: "background-color 0.2s"
                   }}
                 >
                   {preset}
@@ -164,76 +227,103 @@ function Popup() {
           {/* Dashboard Link */}
           <button 
             onClick={() => chrome.tabs.create({ url: "chrome-extension://" + chrome.runtime.id + "/dist/dashboard/index.html" })}
-            style={{ marginTop: "auto", padding: "12px", background: "#333", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}>
+            style={{ 
+              marginTop: "auto", 
+              padding: "12px", 
+              background: isDark ? "#333" : "#333", 
+              color: "white", 
+              border: "none", 
+              borderRadius: "6px", 
+              cursor: "pointer", 
+              fontWeight: "bold",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
+            }}>
             View Dashboard
           </button>
         </>
       ) : (
-        <SettingsPanel />
+        <SettingsPanel isDark={isDark} colors={colors} />
       )}
     </div>
   );
 }
 
-function ProgressItem({ label, value, max }: { label: string, value: number, max: number }) {
+function ProgressItem({ label, value, max, isDark, colors }: { label: string, value: number, max: number, isDark: boolean, colors: any }) {
   const pct = (value / max) * 100;
   let color = "#28a745";
   if (pct < 75) color = "#ffc107";
   if (pct < 50) color = "#dc3545";
   
   return (
-    <div style={{ fontSize: "11px", textAlign: "left" }}>
+    <div style={{ fontSize: "11px", textAlign: "left", color: colors.text }}>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <span>{label}</span>
-        <span>{Math.round(value)}/{max}</span>
+        <span style={{ color: colors.subtext }}>{Math.round(value)}/{max}</span>
       </div>
-      <div style={{ height: "4px", background: "#e9ecef", borderRadius: "2px", marginTop: "2px" }}>
+      <div style={{ height: "4px", background: isDark ? "#333" : "#e9ecef", borderRadius: "2px", marginTop: "2px" }}>
         <div style={{ height: "100%", background: color, width: `${pct}%`, borderRadius: "2px" }}></div>
       </div>
     </div>
   );
 }
 
-// Minimal settings representation to fulfill "shows alert threshold sliders".
-function SettingsPanel() {
+function SettingsPanel({ isDark, colors }: { isDark: boolean, colors: any }) {
   return (
-    <div style={{ background: "white", padding: "14px", borderRadius: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+    <div style={{ 
+      background: colors.card, 
+      padding: "14px", 
+      borderRadius: "8px", 
+      border: isDark ? `1px solid ${colors.border}` : "none",
+      boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)",
+      color: colors.text
+    }}>
       <h3 style={{ marginTop: 0, fontSize: "14px" }}>Alert Thresholds</h3>
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "12px" }}>
         <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
            Minimum Distance (cm)
-          <input type="range" min="30" max="80" defaultValue="50" />
+          <input type="range" min="30" max="80" defaultValue="50" style={{ accentColor: colors.accent }} />
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
            Minimum Blink Rate (bpm)
-          <input type="range" min="5" max="30" defaultValue="15" />
+          <input type="range" min="5" max="30" defaultValue="15" style={{ accentColor: colors.accent }} />
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
            Minimum Brightness (lux)
-          <input type="range" min="10" max="200" defaultValue="50" />
+          <input type="range" min="10" max="200" defaultValue="50" style={{ accentColor: colors.accent }} />
         </label>
       </div>
     </div>
   );
 }
 
-function ConsentScreen({ onAllow }: { onAllow: () => void }) {
+function ConsentScreen({ onAllow, isDark, colors }: { onAllow: () => void, isDark: boolean, colors: any }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "24px", gap: "20px", textAlign: "center", justifyContent: "center", background: "#f8f9fa" }}>
+    <div style={{ 
+      display: "flex", 
+      flexDirection: "column", 
+      height: "100%", 
+      padding: "24px", 
+      gap: "20px", 
+      textAlign: "center", 
+      justifyContent: "center", 
+      background: colors.bg,
+      color: colors.text,
+      transition: "background-color 0.3s ease"
+    }}>
       <div style={{ fontSize: "48px" }}>👁️</div>
-      <h2 style={{ margin: 0, color: "#333" }}>Welcome to EyeGuard</h2>
-      <p style={{ fontSize: "14px", color: "#666", lineHeight: "1.5" }}>
+      <h2 style={{ margin: 0, color: colors.text }}>Welcome to EyeGuard</h2>
+      <p style={{ fontSize: "14px", color: colors.subtext, lineHeight: "1.5" }}>
         To monitor your blink rate and screen distance, we need access to your camera. 
         <br/><br/>
-        <strong style={{ color: "#444" }}>Privacy First:</strong> Processing happens entirely on-device. No images or biometric data ever leave your computer.
+        <strong style={{ color: isDark ? "#fff" : "#444" }}>Privacy First:</strong> Processing happens entirely on-device. No images or biometric data ever leave your computer.
       </p>
       <button 
         onClick={onAllow}
-        style={{ marginTop: "10px", padding: "14px", background: "#6366f1", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}
+        style={{ marginTop: "10px", padding: "14px", background: colors.accent, color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}
       >
         Allow Camera Access
       </button>
-      <p style={{ fontSize: "11px", color: "#999" }}>
+      <p style={{ fontSize: "11px", color: colors.subtext }}>
         By clicking Allow, you agree to our privacy-first local monitoring policy.
       </p>
     </div>

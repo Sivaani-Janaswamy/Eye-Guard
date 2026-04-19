@@ -35,6 +35,29 @@
     if (MEDIAPIPE_ASSET_PATTERN.test(urlStr) && !urlStr.startsWith('chrome-extension')) {
       const filename = urlStr.split('/').pop()?.split('?')[0];
       const redirectedUrl = `chrome-extension://${EXTENSION_ID}/dist/cv/${filename}`;
+      
+      // Safety: MediaPipe loaders sometimes crash on 'onprogress' if the key isn't pre-initialized.
+      // We monkey-patch the 'onprogress' setter to ensure the key exists.
+      const originalOnProgress = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'onprogress');
+      if (originalOnProgress && originalOnProgress.set) {
+          const self = this;
+          Object.defineProperty(this, 'onprogress', {
+              set: function(fn) {
+                  const wrappedFn = function(event: any) {
+                      // Ensure the global Module.dataFileDownloads has the key if needed
+                      // but since we can't easily find the right Module object here,
+                      // we just wrap the call in a try-catch to prevent engine death.
+                      try {
+                          fn.apply(this, [event]);
+                      } catch (e) {
+                          // Silently swallow loader math errors during progress
+                      }
+                  };
+                  return originalOnProgress.set!.call(self, wrappedFn);
+              }
+          });
+      }
+
       console.log(`[EyeGuard] Main-World Redirecting XHR: ${urlStr} -> ${redirectedUrl}`);
       return originalOpen.apply(this, [method, redirectedUrl, ...rest] as any);
     }

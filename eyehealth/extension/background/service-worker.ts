@@ -10,6 +10,12 @@ const alertEngine = new AlertEngine();
 // Handle startup and installation
 chrome.runtime.onInstalled.addListener(async () => {
   console.log("EyeGuard Extension Installed");
+  
+  // Set default settings if not already present
+  const settings = await chrome.storage.local.get(["theme", "isMonitoring"]);
+  if (!settings.theme) await chrome.storage.local.set({ theme: "light" });
+  if (settings.isMonitoring === undefined) await chrome.storage.local.set({ isMonitoring: true });
+
   await setupMidnightAlarm();
   await checkConsentAndInitialize();
 });

@@ -27738,6 +27738,7 @@
         const [showSettings, setShowSettings] = (0, import_react.useState)(false);
         const [activePreset, setActivePreset] = (0, import_react.useState)("off");
         const [hasConsent, setHasConsent] = (0, import_react.useState)(null);
+        const [theme, setTheme] = (0, import_react.useState)("light");
         (0, import_react.useEffect)(() => {
           const loadData = async () => {
             const consentCount = await db.consent.count();
@@ -27766,6 +27767,8 @@
             if (correctionProfileObj && correctionProfileObj.activePreset) {
               setActivePreset(correctionProfileObj.activePreset);
             }
+            const settings = await chrome.storage.local.get("theme");
+            if (settings.theme) setTheme(settings.theme);
           };
           loadData();
           const interval = setInterval(loadData, 5e3);
@@ -27802,13 +27805,69 @@
             }
           });
         };
+        const toggleTheme = () => {
+          const newTheme = theme === "light" ? "dark" : "light";
+          setTheme(newTheme);
+          chrome.storage.local.set({ theme: newTheme });
+          chrome.tabs.query({}, (tabs) => {
+            tabs.forEach((tab) => {
+              if (tab.id) chrome.tabs.sendMessage(tab.id, { type: "THEME_CHANGED", theme: newTheme }).catch(() => {
+              });
+            });
+          });
+        };
+        const isDark = theme === "dark";
+        const colors = {
+          bg: isDark ? "#121212" : "#f8f9fa",
+          card: isDark ? "#1e1e1e" : "#ffffff",
+          text: isDark ? "#e0e0e0" : "#333333",
+          subtext: isDark ? "#aaaaaa" : "#666666",
+          border: isDark ? "#333333" : "#eeeeee",
+          accent: "#6366f1"
+        };
         if (hasConsent === null) {
           return /* @__PURE__ */ import_react.default.createElement("div", { style: { padding: "32px", textAlign: "center", color: "#666" } }, "Initialising...");
         }
         if (!hasConsent) {
-          return /* @__PURE__ */ import_react.default.createElement(ConsentScreen, { onAllow: handleGrantConsent });
+          return /* @__PURE__ */ import_react.default.createElement(ConsentScreen, { onAllow: handleGrantConsent, isDark, colors });
         }
-        return /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100%", padding: "16px", gap: "16px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement("h2", { style: { margin: 0, fontSize: "18px" } }, "EyeGuard"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: "10px", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", cursor: "pointer" } }, /* @__PURE__ */ import_react.default.createElement("input", { type: "checkbox", checked: isMonitoring, onChange: handleToggleMonitoring }), " Active"), /* @__PURE__ */ import_react.default.createElement("span", { style: { cursor: "pointer", fontSize: "16px" }, onClick: () => setShowSettings(!showSettings) }, "\u2699\uFE0F"))), !showSettings ? /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { style: { textAlign: "center", padding: "12px", background: "white", borderRadius: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "14px", color: "#666" } }, "Today's EyeScore"), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "64px", fontWeight: "bold", color: getScoreColor(scoreData?.score || 100), lineHeight: "1.1" } }, scoreData?.score || 100), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: "12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" } }, /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Screen Time", value: scoreData?.breakdown.screenTimeScore || 25, max: 25 }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Distance", value: scoreData?.breakdown.distanceScore || 25, max: 25 }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Blinks", value: scoreData?.breakdown.blinkScore || 25, max: 25 }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Lighting", value: scoreData?.breakdown.lightingScore || 25, max: 25 }))), /* @__PURE__ */ import_react.default.createElement("div", { style: { background: "white", padding: "12px", borderRadius: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", marginBottom: "8px" } }, "Current Session"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px" } }, /* @__PURE__ */ import_react.default.createElement("div", null, "\u23F1\uFE0F ", activeSession ? Math.round((Date.now() - activeSession.startTime) / 6e4) : 0, "m"), /* @__PURE__ */ import_react.default.createElement("div", null, "\u{1F440} ", activeSession ? Math.round(activeSession.avgBlinkRate) : 0, " bpm"), /* @__PURE__ */ import_react.default.createElement("div", null, "\u{1F4CF} ", activeSession ? Math.round(activeSession.avgDistanceCm) : 0, " cm"))), /* @__PURE__ */ import_react.default.createElement("div", { style: { background: "white", padding: "12px", borderRadius: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", marginBottom: "8px" } }, "Display Correction"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: "8px" } }, ["off", "office", "night"].map((preset) => /* @__PURE__ */ import_react.default.createElement(
+        return /* @__PURE__ */ import_react.default.createElement("div", { style: {
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          padding: "16px",
+          gap: "16px",
+          backgroundColor: colors.bg,
+          color: colors.text,
+          transition: "background-color 0.3s ease, color 0.3s ease"
+        } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement("h2", { style: { margin: 0, fontSize: "18px" } }, "EyeGuard"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: "12px", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement(
+          "span",
+          {
+            style: { cursor: "pointer", fontSize: "18px", userSelect: "none" },
+            onClick: toggleTheme,
+            title: `Switch to ${isDark ? "Light" : "Dark"} Mode`
+          },
+          isDark ? "\u2600\uFE0F" : "\u{1F319}"
+        ), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", cursor: "pointer" } }, /* @__PURE__ */ import_react.default.createElement("input", { type: "checkbox", checked: isMonitoring, onChange: handleToggleMonitoring }), " Active"), /* @__PURE__ */ import_react.default.createElement("span", { style: { cursor: "pointer", fontSize: "16px" }, onClick: () => setShowSettings(!showSettings) }, "\u2699\uFE0F"))), !showSettings ? /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { style: {
+          textAlign: "center",
+          padding: "12px",
+          background: colors.card,
+          borderRadius: "8px",
+          boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)",
+          border: isDark ? `1px solid ${colors.border}` : "none"
+        } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "14px", color: colors.subtext } }, "Today's EyeScore"), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "64px", fontWeight: "bold", color: getScoreColor(scoreData?.score || 100), lineHeight: "1.1" } }, scoreData?.score || 100), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: "12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" } }, /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Screen Time", value: scoreData?.breakdown.screenTimeScore || 25, max: 25, isDark, colors }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Distance", value: scoreData?.breakdown.distanceScore || 25, max: 25, isDark, colors }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Blinks", value: scoreData?.breakdown.blinkScore || 25, max: 25, isDark, colors }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Lighting", value: scoreData?.breakdown.lightingScore || 25, max: 25, isDark, colors }))), /* @__PURE__ */ import_react.default.createElement("div", { style: {
+          background: colors.card,
+          padding: "12px",
+          borderRadius: "8px",
+          border: isDark ? `1px solid ${colors.border}` : "none",
+          boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)"
+        } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", marginBottom: "8px" } }, "Current Session"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px" } }, /* @__PURE__ */ import_react.default.createElement("div", null, "\u23F1\uFE0F ", activeSession ? Math.round((Date.now() - activeSession.startTime) / 6e4) : 0, "m"), /* @__PURE__ */ import_react.default.createElement("div", null, "\u{1F440} ", activeSession ? Math.round(activeSession.avgBlinkRate) : 0, " bpm"), /* @__PURE__ */ import_react.default.createElement("div", null, "\u{1F4CF} ", activeSession ? Math.round(activeSession.avgDistanceCm) : 0, " cm"))), /* @__PURE__ */ import_react.default.createElement("div", { style: {
+          background: colors.card,
+          padding: "12px",
+          borderRadius: "8px",
+          border: isDark ? `1px solid ${colors.border}` : "none",
+          boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)"
+        } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", marginBottom: "8px" } }, "Display Correction"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: "8px" } }, ["off", "office", "night"].map((preset) => /* @__PURE__ */ import_react.default.createElement(
           "button",
           {
             key: preset,
@@ -27818,11 +27877,12 @@
               padding: "8px",
               border: "none",
               borderRadius: "4px",
-              background: activePreset === preset ? "#007bff" : "#f1f1f1",
-              color: activePreset === preset ? "white" : "#333",
+              background: activePreset === preset ? colors.accent : isDark ? "#2a2a2a" : "#f1f1f1",
+              color: activePreset === preset ? "white" : colors.text,
               cursor: "pointer",
               textTransform: "capitalize",
-              fontSize: "12px"
+              fontSize: "12px",
+              transition: "background-color 0.2s"
             }
           },
           preset
@@ -27830,30 +27890,58 @@
           "button",
           {
             onClick: () => chrome.tabs.create({ url: "chrome-extension://" + chrome.runtime.id + "/dist/dashboard/index.html" }),
-            style: { marginTop: "auto", padding: "12px", background: "#333", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }
+            style: {
+              marginTop: "auto",
+              padding: "12px",
+              background: isDark ? "#333" : "#333",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "bold",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
+            }
           },
           "View Dashboard"
-        )) : /* @__PURE__ */ import_react.default.createElement(SettingsPanel, null));
+        )) : /* @__PURE__ */ import_react.default.createElement(SettingsPanel, { isDark, colors }));
       }
-      function ProgressItem({ label, value, max }) {
+      function ProgressItem({ label, value, max, isDark, colors }) {
         const pct = value / max * 100;
         let color = "#28a745";
         if (pct < 75) color = "#ffc107";
         if (pct < 50) color = "#dc3545";
-        return /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "11px", textAlign: "left" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between" } }, /* @__PURE__ */ import_react.default.createElement("span", null, label), /* @__PURE__ */ import_react.default.createElement("span", null, Math.round(value), "/", max)), /* @__PURE__ */ import_react.default.createElement("div", { style: { height: "4px", background: "#e9ecef", borderRadius: "2px", marginTop: "2px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { height: "100%", background: color, width: `${pct}%`, borderRadius: "2px" } })));
+        return /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "11px", textAlign: "left", color: colors.text } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between" } }, /* @__PURE__ */ import_react.default.createElement("span", null, label), /* @__PURE__ */ import_react.default.createElement("span", { style: { color: colors.subtext } }, Math.round(value), "/", max)), /* @__PURE__ */ import_react.default.createElement("div", { style: { height: "4px", background: isDark ? "#333" : "#e9ecef", borderRadius: "2px", marginTop: "2px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { height: "100%", background: color, width: `${pct}%`, borderRadius: "2px" } })));
       }
-      function SettingsPanel() {
-        return /* @__PURE__ */ import_react.default.createElement("div", { style: { background: "white", padding: "14px", borderRadius: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" } }, /* @__PURE__ */ import_react.default.createElement("h3", { style: { marginTop: 0, fontSize: "14px" } }, "Alert Thresholds"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "12px", fontSize: "12px" } }, /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: "4px" } }, "Minimum Distance (cm)", /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "30", max: "80", defaultValue: "50" })), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: "4px" } }, "Minimum Blink Rate (bpm)", /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "5", max: "30", defaultValue: "15" })), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: "4px" } }, "Minimum Brightness (lux)", /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "10", max: "200", defaultValue: "50" }))));
+      function SettingsPanel({ isDark, colors }) {
+        return /* @__PURE__ */ import_react.default.createElement("div", { style: {
+          background: colors.card,
+          padding: "14px",
+          borderRadius: "8px",
+          border: isDark ? `1px solid ${colors.border}` : "none",
+          boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)",
+          color: colors.text
+        } }, /* @__PURE__ */ import_react.default.createElement("h3", { style: { marginTop: 0, fontSize: "14px" } }, "Alert Thresholds"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "12px", fontSize: "12px" } }, /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: "4px" } }, "Minimum Distance (cm)", /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "30", max: "80", defaultValue: "50", style: { accentColor: colors.accent } })), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: "4px" } }, "Minimum Blink Rate (bpm)", /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "5", max: "30", defaultValue: "15", style: { accentColor: colors.accent } })), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: "4px" } }, "Minimum Brightness (lux)", /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "10", max: "200", defaultValue: "50", style: { accentColor: colors.accent } }))));
       }
-      function ConsentScreen({ onAllow }) {
-        return /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100%", padding: "24px", gap: "20px", textAlign: "center", justifyContent: "center", background: "#f8f9fa" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "48px" } }, "\u{1F441}\uFE0F"), /* @__PURE__ */ import_react.default.createElement("h2", { style: { margin: 0, color: "#333" } }, "Welcome to EyeGuard"), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: "14px", color: "#666", lineHeight: "1.5" } }, "To monitor your blink rate and screen distance, we need access to your camera.", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("strong", { style: { color: "#444" } }, "Privacy First:"), " Processing happens entirely on-device. No images or biometric data ever leave your computer."), /* @__PURE__ */ import_react.default.createElement(
+      function ConsentScreen({ onAllow, isDark, colors }) {
+        return /* @__PURE__ */ import_react.default.createElement("div", { style: {
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          padding: "24px",
+          gap: "20px",
+          textAlign: "center",
+          justifyContent: "center",
+          background: colors.bg,
+          color: colors.text,
+          transition: "background-color 0.3s ease"
+        } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "48px" } }, "\u{1F441}\uFE0F"), /* @__PURE__ */ import_react.default.createElement("h2", { style: { margin: 0, color: colors.text } }, "Welcome to EyeGuard"), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: "14px", color: colors.subtext, lineHeight: "1.5" } }, "To monitor your blink rate and screen distance, we need access to your camera.", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("strong", { style: { color: isDark ? "#fff" : "#444" } }, "Privacy First:"), " Processing happens entirely on-device. No images or biometric data ever leave your computer."), /* @__PURE__ */ import_react.default.createElement(
           "button",
           {
             onClick: onAllow,
-            style: { marginTop: "10px", padding: "14px", background: "#6366f1", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }
+            style: { marginTop: "10px", padding: "14px", background: colors.accent, color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }
           },
           "Allow Camera Access"
-        ), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: "11px", color: "#999" } }, "By clicking Allow, you agree to our privacy-first local monitoring policy."));
+        ), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: "11px", color: colors.subtext } }, "By clicking Allow, you agree to our privacy-first local monitoring policy."));
       }
       var container = document.getElementById("root");
       if (container) {

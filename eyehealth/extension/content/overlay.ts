@@ -10,6 +10,9 @@ let cameraRunning = false;
 let hudElement: HTMLDivElement | null = null;
 let hudAccentBar: HTMLDivElement | null = null;
 let hudContent: HTMLDivElement | null = null;
+let isHudMinimized = false;
+let hudIconElement: HTMLDivElement | null = null;
+let currentTheme: 'light' | 'dark' = 'light';
 
 /**
  * Injects a floating alert notification into the corner of the active webpage payload window.
@@ -167,15 +170,15 @@ function injectStatusHUD(): void {
     top: "20px",
     left: "20px",
     width: "320px",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: currentTheme === 'dark' ? "rgba(26, 26, 26, 0.98)" : "#FFFFFF",
     borderRadius: "8px",
-    boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+    boxShadow: currentTheme === 'dark' ? "0 8px 32px rgba(0,0,0,0.5)" : "0 8px 30px rgba(0,0,0,0.12)",
     zIndex: "2147483647",
     display: "flex",
     overflow: "hidden",
     fontFamily: "'Inter', -apple-system, sans-serif",
-    transition: "transform 0.3s ease, opacity 0.3s ease",
-    border: "1px solid #E0E0E0"
+    transition: "transform 0.3s ease, opacity 0.3s ease, background-color 0.3s ease",
+    border: currentTheme === 'dark' ? "1px solid #333333" : "1px solid #E0E0E0"
   });
 
   // Accent Bar (Left side)
@@ -202,8 +205,23 @@ function injectStatusHUD(): void {
     fontSize: "10px",
     fontWeight: "800",
     color: "#666",
-    letterSpacing: "1px"
+    letterSpacing: "1px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center"
   });
+
+  // Minimize Button
+  const minBtn = document.createElement("div");
+  minBtn.textContent = "—";
+  Object.assign(minBtn.style, {
+    cursor: "pointer",
+    padding: "0 4px",
+    fontSize: "14px",
+    transition: "color 0.2s"
+  });
+  minBtn.onclick = toggleHUD;
+  header.appendChild(minBtn);
 
   const message = document.createElement("div");
   message.id = "eyeguard-hud-msg";
@@ -211,7 +229,7 @@ function injectStatusHUD(): void {
   Object.assign(message.style, {
     fontSize: "13px",
     fontWeight: "600",
-    color: "#333",
+    color: currentTheme === 'dark' ? "#F0F0F0" : "#333",
     lineHeight: "1.4"
   });
 
@@ -221,19 +239,73 @@ function injectStatusHUD(): void {
   hudElement.appendChild(hudContent);
   
   (document.body || document.documentElement).appendChild(hudElement);
+
+  // Inject Minimized Icon (hidden by default)
+  injectStatusIcon();
+}
+
+/**
+ * Creates the small floating eye icon for minimized state.
+ */
+function injectStatusIcon(): void {
+  if (hudIconElement) return;
+
+  hudIconElement = document.createElement("div");
+  hudIconElement.id = "eyeguard-hud-icon";
+  hudIconElement.innerHTML = "👁️";
+  
+  Object.assign(hudIconElement.style, {
+    position: "fixed",
+    top: "20px",
+    left: "20px",
+    width: "48px",
+    height: "48px",
+    backgroundColor: "#FFFFFF",
+    borderRadius: "50%",
+    boxShadow: "0 4px 15px rgba(0,0,0,0.15)",
+    zIndex: "2147483647",
+    display: "none", // Hidden by default
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "24px",
+    cursor: "pointer",
+    border: "2px solid #0056b3",
+    transition: "transform 0.2s ease, background-color 0.3s ease, border-color 0.3s ease"
+  });
+
+  hudIconElement.onclick = toggleHUD;
+  (document.body || document.documentElement).appendChild(hudIconElement);
+}
+
+/**
+ * Toggles between full HUD and minimized icon.
+ */
+function toggleHUD(): void {
+  isHudMinimized = !isHudMinimized;
+  if (!hudElement || !hudIconElement) return;
+
+  if (isHudMinimized) {
+    hudElement.style.display = "none";
+    hudIconElement.style.display = "flex";
+  } else {
+    hudElement.style.display = "flex";
+    hudIconElement.style.display = "none";
+  }
 }
 
 /**
  * Updates the HUD with real-time messages and color states.
  */
 function updateStatusHUD(level: 'info' | 'success' | 'warning' | 'error' | 'notice', msg: string): void {
-  if (!hudElement || !hudAccentBar || !hudContent) return;
+  if (!hudElement || !hudAccentBar || !hudContent || !hudIconElement) return;
 
   const msgEl = document.getElementById("eyeguard-hud-msg");
-  if (msgEl) msgEl.textContent = msg;
+  if (msgEl) {
+    msgEl.textContent = msg;
+    msgEl.style.color = currentTheme === 'dark' ? "#F0F0F0" : "#333";
+  }
 
   let color = "#0056b3"; // Default Info Blue
-  let bgColor = "#FFFFFF";
 
   switch (level) {
     case 'success': color = "#28a745"; break;
@@ -244,12 +316,17 @@ function updateStatusHUD(level: 'info' | 'success' | 'warning' | 'error' | 'noti
   }
 
   hudAccentBar.style.backgroundColor = color;
+  hudIconElement.style.borderColor = color;
   
   if (level === 'error' || level === 'warning') {
     hudElement.style.borderColor = color;
   } else {
-    hudElement.style.borderColor = "#E0E0E0";
+    hudElement.style.borderColor = currentTheme === 'dark' ? "#333333" : "#E0E0E0";
   }
+  
+  // Dynamic update for background
+  hudElement.style.backgroundColor = currentTheme === 'dark' ? "rgba(26, 26, 26, 0.98)" : "#FFFFFF";
+  hudIconElement.style.backgroundColor = currentTheme === 'dark' ? "#1E1E1E" : "#FFFFFF";
 }
 
 /**
@@ -403,6 +480,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'REMOVE_CORRECTION') {
     removeCorrection();
   }
+  if (message.type === 'THEME_CHANGED') {
+    currentTheme = message.theme;
+    if (hudElement) {
+        // Force refresh styles
+        updateStatusHUD('info', document.getElementById("eyeguard-hud-msg")?.textContent || "");
+    }
+  }
 });
 
 // Bootstrapper hook
@@ -411,7 +495,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // This is required to catch MediaPipe loader requests in the page context.
   injectMainInterceptor();
 
-  // 1. Initialize Status HUD
+  // 1. Load Theme from storage
+  const settings = await chrome.storage.local.get('theme');
+  currentTheme = settings.theme || 'light';
+
+  // 2. Initialize Status HUD
   injectStatusHUD();
   updateStatusHUD('info', "[EyeGuard] System check... verifying permissions.");
 
