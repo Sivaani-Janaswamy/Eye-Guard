@@ -1,0 +1,30 @@
+[
+  {
+    "videoFile": "synthetic_normal.mp4",
+    "condition": "normal",
+    "totalBlinks": 18,
+    "durationSeconds": 60,
+    "avgDistanceCm": 55.4
+  },
+  {
+    "videoFile": "synthetic_low_light.mp4",
+    "condition": "low_light",
+    "totalBlinks": 14,
+    "durationSeconds": 60,
+    "avgDistanceCm": 48.2
+  },
+  {
+    "videoFile": "synthetic_glasses.mp4",
+    "condition": "glasses",
+    "totalBlinks": 22,
+    "durationSeconds": 60,
+    "avgDistanceCm": 51.0
+  },
+  {
+    "videoFile": "synthetic_head_turned.mp4",
+    "condition": "head_turned",
+    "totalBlinks": 12,
+    "durationSeconds": 60,
+    "avgDistanceCm": 62.1
+  }
+]
