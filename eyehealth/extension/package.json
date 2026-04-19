@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build:ext": "esbuild background/service-worker.ts --bundle --outfile=dist/service-worker.js --format=esm --platform=browser && esbuild content/overlay.ts --bundle --outfile=dist/content/overlay.js --platform=browser && esbuild popup/popup.tsx --bundle --outfile=dist/popup/popup.js --platform=browser --jsx=automatic"
+    "build:ext": "esbuild background/service-worker.ts --bundle --outfile=dist/service-worker.js --format=esm --platform=browser && esbuild content/overlay.ts --bundle --outfile=dist/content/overlay.js --platform=browser && esbuild popup/popup.tsx --bundle --outfile=popup/popup.js --platform=browser --jsx=automatic"
   },
   "keywords": [],
   "author": "",

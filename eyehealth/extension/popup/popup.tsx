@@ -10,10 +10,17 @@ function Popup() {
   const [isMonitoring, setIsMonitoring] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [activePreset, setActivePreset] = useState("off");
+  const [hasConsent, setHasConsent] = useState<boolean | null>(null);
 
   // Load Initial Data
   useEffect(() => {
     const loadData = async () => {
+      // 0. Check Consent
+      const consentCount = await db.consent.count();
+      setHasConsent(consentCount > 0);
+
+      if (consentCount === 0) return; // Stop here if no consent
+
       // 1. Fetch Today's Score
       const tzOffset = new Date().getTimezoneOffset() * 60000;
       const todayString = new Date(Date.now() - tzOffset).toISOString().split("T")[0];
@@ -50,6 +57,19 @@ function Popup() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleGrantConsent = async () => {
+    await db.consent.put({
+      consentedAt: Date.now(),
+      consentVersion: "1.0",
+      cameraGranted: true,
+      backendSyncEnabled: false,
+      dataRetentionDays: 30
+    });
+    setHasConsent(true);
+    // After consent, background worker will notice on next alarm or if we kick off a message
+    chrome.runtime.sendMessage({ type: "START_MONITORING" });
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 75) return "#28a745"; // green
     if (score >= 50) return "#ffc107"; // amber
@@ -74,6 +94,14 @@ function Popup() {
       }
     });
   };
+
+  if (hasConsent === null) {
+    return <div style={{ padding: "32px", textAlign: "center", color: "#666" }}>Initialising...</div>;
+  }
+
+  if (!hasConsent) {
+    return <ConsentScreen onAllow={handleGrantConsent} />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "16px", gap: "16px" }}>
@@ -138,7 +166,7 @@ function Popup() {
 
           {/* Dashboard Link */}
           <button 
-            onClick={() => chrome.tabs.create({ url: "chrome-extension://" + chrome.runtime.id + "/dashboard/index.html" })}
+            onClick={() => chrome.tabs.create({ url: "chrome-extension://" + chrome.runtime.id + "/dist/dashboard/index.html" })}
             style={{ marginTop: "auto", padding: "12px", background: "#333", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}>
             View Dashboard
           </button>
@@ -188,6 +216,29 @@ function SettingsPanel() {
           <input type="range" min="10" max="200" defaultValue="50" />
         </label>
       </div>
+    </div>
+  );
+}
+
+function ConsentScreen({ onAllow }: { onAllow: () => void }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "24px", gap: "20px", textAlign: "center", justifyContent: "center", background: "#f8f9fa" }}>
+      <div style={{ fontSize: "48px" }}>👁️</div>
+      <h2 style={{ margin: 0, color: "#333" }}>Welcome to EyeGuard</h2>
+      <p style={{ fontSize: "14px", color: "#666", lineHeight: "1.5" }}>
+        To monitor your blink rate and screen distance, we need access to your camera. 
+        <br/><br/>
+        <strong style={{ color: "#444" }}>Privacy First:</strong> Processing happens entirely on-device. No images or biometric data ever leave your computer.
+      </p>
+      <button 
+        onClick={onAllow}
+        style={{ marginTop: "10px", padding: "14px", background: "#6366f1", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}
+      >
+        Allow Camera Access
+      </button>
+      <p style={{ fontSize: "11px", color: "#999" }}>
+        By clicking Allow, you agree to our privacy-first local monitoring policy.
+      </p>
     </div>
   );
 }

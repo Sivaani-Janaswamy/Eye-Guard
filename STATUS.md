@@ -6,7 +6,7 @@
 |---|---|---|---|---|
 | A — DB + Service Worker | complete | Antigravity | 2026-04-18 | DB schema, db singleton, SW skeleton created |
 | B — Content Script Overlay | complete | Antigravity | 2026-04-19 | overlay.ts created |
-| C — Popup UI | complete | Antigravity | 2026-04-19 | popup.html and popup.tsx created with React setup
+| C — Popup UI | complete | Antigravity | 2026-04-19 | popup.html and popup.tsx created with React setup and one-time consent flow gating |
 | D — CV Pipeline | complete | Antigravity | 2026-04-18 | face-mesh.ts and blink-detector.ts created |
 | E — Session Tracker + Score Engine | complete | Antigravity | 2026-04-18 | session-tracker.ts and score-engine.ts created |
 | F — Alert Engine | complete | Antigravity | 2026-04-19 | alert-engine.ts created |
