@@ -15,7 +15,7 @@ export class FaceMeshProcessor {
     
     this.faceMesh = new FaceMesh({
       locateFile: (file: string) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+        return chrome.runtime.getURL(`dist/cv/${file}`);
       }
     });
 

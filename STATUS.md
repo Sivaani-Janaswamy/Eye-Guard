@@ -22,6 +22,9 @@
 - **Module D**: Used standard Luma formula to estimate ambientLuxLevel from video feed canvas.
 - **Module D**: Estimated focal length as 600px and IPD as 6.3cm for screenDistanceCm calculation.
 - **Module J**: Implemented the standalone FastAPI architecture completely. Adhered precisely to all algorithms. `AlertConfig` table was missing from the prompt's `models.py` schema generation instruction but was inferred correctly based on the `alerts/config` PUT constraints. None of the backend APIs have been computationally tested or integration tested via active frontend clients yet (Untested).
+- **Module B**: Architecture fix — content script DB isolation implemented via message passing to background script for consent verification.
+- **General**: Fixed consent race condition — DB write now completes before broadcast, toArray() replaces orderBy().last().
+- **Module D**: CSP Fix — MediaPipe assets (JS/WASM) are now bundled locally within the extension (`dist/cv/`) to bypass website security policies.
 
 ## BLOCKERS
 <!-- Log anything blocking progress -->

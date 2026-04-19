@@ -57,17 +57,14 @@ function Popup() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleGrantConsent = async () => {
-    await db.consent.put({
-      consentedAt: Date.now(),
-      consentVersion: "1.0",
-      cameraGranted: true,
-      backendSyncEnabled: false,
-      dataRetentionDays: 30
+  const handleGrantConsent = () => {
+    chrome.runtime.sendMessage({ type: "GRANT_CONSENT" }, (response) => {
+      if (response?.success) {
+        setHasConsent(true);
+      } else {
+        console.error("Could not save consent");
+      }
     });
-    setHasConsent(true);
-    // After consent, background worker will notice on next alarm or if we kick off a message
-    chrome.runtime.sendMessage({ type: "START_MONITORING" });
   };
 
   const getScoreColor = (score: number) => {

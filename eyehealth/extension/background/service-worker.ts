@@ -1,4 +1,5 @@
 import { db } from "../db/db.js";
+import type { ConsentRecord } from "../db/schema.js";
 
 // Handle startup and installation
 chrome.runtime.onInstalled.addListener(async () => {
@@ -63,7 +64,65 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // Handle messages from content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'CHECK_CONSENT') {
+    db.consent.toArray()
+      .then(records => {
+        const granted = records.some(r => r.cameraGranted === true);
+        sendResponse({ granted });
+      })
+      .catch(() => sendResponse({ granted: false }));
+    return true;
+  }
+
+  if (message.type === 'GRANT_CONSENT') {
+    const record: ConsentRecord = {
+      consentedAt: Date.now(),
+      consentVersion: '1.0',
+      cameraGranted: true,
+      backendSyncEnabled: false,
+      dataRetentionDays: 90,
+    };
+    db.consent.clear()
+      .then(() => db.consent.add(record))
+      .then(() => {
+        // Only broadcast AFTER write is confirmed committed
+        sendResponse({ success: true });
+        // Small delay ensures IndexedDB transaction is fully flushed 
+        // before content scripts query it
+        setTimeout(() => {
+          chrome.tabs.query({}, (tabs) => {
+            tabs.forEach(tab => {
+              if (tab.id) {
+                chrome.tabs.sendMessage(tab.id, { type: 'CONSENT_GRANTED' })
+                  .catch(() => {});
+              }
+            });
+          });
+        }, 100);
+      })
+      .catch(() => sendResponse({ success: false }));
+    return true;
+  }
+
   switch (message.type) {
+    case "START_MONITORING":
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          if (tab.id) {
+            chrome.tabs.sendMessage(tab.id, { type: 'CONSENT_GRANTED' }).catch(() => {});
+          }
+        });
+      });
+      break;
+    case "STOP_MONITORING":
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          if (tab.id) {
+            chrome.tabs.sendMessage(tab.id, { type: 'STOP_CAMERA' }).catch(() => {});
+          }
+        });
+      });
+      break;
     case "START_SESSION":
       console.log("START_SESSION received", message.payload);
       break;

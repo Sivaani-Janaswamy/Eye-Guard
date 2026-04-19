@@ -27771,16 +27771,14 @@
           const interval = setInterval(loadData, 5e3);
           return () => clearInterval(interval);
         }, []);
-        const handleGrantConsent = async () => {
-          await db.consent.put({
-            consentedAt: Date.now(),
-            consentVersion: "1.0",
-            cameraGranted: true,
-            backendSyncEnabled: false,
-            dataRetentionDays: 30
+        const handleGrantConsent = () => {
+          chrome.runtime.sendMessage({ type: "GRANT_CONSENT" }, (response) => {
+            if (response?.success) {
+              setHasConsent(true);
+            } else {
+              console.error("Could not save consent");
+            }
           });
-          setHasConsent(true);
-          chrome.runtime.sendMessage({ type: "START_MONITORING" });
         };
         const getScoreColor = (score) => {
           if (score >= 75) return "#28a745";

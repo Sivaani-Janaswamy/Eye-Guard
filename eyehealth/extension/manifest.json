@@ -47,7 +47,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["dist/*", "dashboard/*"],
+      "resources": ["dist/*", "dashboard/*", "dist/cv/*"],
       "matches": ["<all_urls>"]
     }
   ]
