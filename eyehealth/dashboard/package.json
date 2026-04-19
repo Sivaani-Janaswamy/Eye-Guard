@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mediapipe/face_mesh": "^0.4.1633559619",
     "dexie": "^4.4.2",
     "dexie-react-hooks": "^4.4.0",
     "react": "^19.2.4",
@@ -21,6 +22,7 @@
     "@eslint/js": "^9.39.4",
     "@rolldown/plugin-babel": "^0.2.2",
     "@types/babel__core": "^7.20.5",
+    "@types/chrome": "^0.1.40",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

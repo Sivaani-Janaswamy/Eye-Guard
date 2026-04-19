@@ -1,60 +1,54 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
-interface LiveMetrics {
+interface LiveFrame {
   faceDetected: boolean;
   distanceCm: number;
   blinkRate: number;
   lux: number;
   confidence: number;
-  fps: number;
-  lastUpdate: number;
+  timestamp: number;
 }
 
 export default function CameraTest() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [metrics, setMetrics] = useState<LiveMetrics>({
-    faceDetected: false, distanceCm: 0, blinkRate: 0,
-    lux: 0, confidence: 0, fps: 0, lastUpdate: 0
-  });
-  const [status, setStatus] = useState<
-    'idle' | 'requesting' | 'active' | 'error'
-  >('idle');
-  const [errorMsg, setErrorMsg] = useState('');
-  const frameCountRef = useRef(0);
-  const lastFpsRef = useRef(Date.now());
+  const [camStatus, setCamStatus] = useState<'off' | 'starting' | 'on' | 'error'>('off');
+  const [camError, setCamError] = useState('');
+  const [frame, setFrame] = useState<LiveFrame | null>(null);
+  const [fps, setFps] = useState(0);
+  const fpsCountRef = useRef(0);
+  const fpsTimerRef = useRef(Date.now());
 
+  // Listen for frames from the extension content script
   useEffect(() => {
-    // Listen for frames posted from main-world via the extension
     const handler = (event: MessageEvent) => {
+      // The extension broadcasts EYEGUARD_FRAME type messages to the window
       if (event.data?.type !== 'EYEGUARD_FRAME') return;
-      const f = event.data.payload;
+      const p = event.data.payload;
 
-      frameCountRef.current++;
+      fpsCountRef.current++;
       const now = Date.now();
-      const elapsed = (now - lastFpsRef.current) / 1000;
-      let currentFps = metrics.fps;
-      if (elapsed >= 1) {
-        currentFps = Math.round(frameCountRef.current / elapsed);
-        frameCountRef.current = 0;
-        lastFpsRef.current = now;
+      if (now - fpsTimerRef.current >= 1000) {
+        setFps(fpsCountRef.current);
+        fpsCountRef.current = 0;
+        fpsTimerRef.current = now;
       }
 
-      setMetrics({
-        faceDetected: f.faceDetected,
-        distanceCm:   Math.round(f.screenDistanceCm),
-        blinkRate:    parseFloat(f.blinkRate?.toFixed(1) ?? '0'),
-        lux:          Math.round(f.ambientLuxLevel),
-        confidence:   Math.round((f.confidence ?? 0) * 100),
-        fps:          currentFps,
-        lastUpdate:   now
+      setFrame({
+        faceDetected: p.faceDetected ?? false,
+        distanceCm:   Math.round(p.screenDistanceCm ?? 0),
+        blinkRate:    parseFloat((p.blinkRate ?? 0).toFixed(1)),
+        lux:          Math.round(p.ambientLuxLevel ?? 0),
+        confidence:   Math.round((p.confidence ?? 0) * 100),
+        timestamp:    now
       });
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [metrics.fps]);
+  }, []);
 
-  async function startCamera() {
-    setStatus('requesting');
+  const startCamera = useCallback(async () => {
+    setCamStatus('starting');
+    setCamError('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480, facingMode: 'user' }
@@ -62,155 +56,141 @@ export default function CameraTest() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
-        setStatus('active');
+        setCamStatus('on');
       }
     } catch (err: any) {
-      setStatus('error');
-      setErrorMsg(err.message ?? 'Camera access denied');
+      setCamStatus('error');
+      setCamError(err.name === 'NotAllowedError'
+        ? 'Camera permission denied'
+        : err.message ?? 'Camera failed');
     }
-  }
+  }, []);
 
-  function stopCamera() {
+  const stopCamera = useCallback(() => {
     const video = videoRef.current;
     if (video?.srcObject) {
-      (video.srcObject as MediaStream)
-        .getTracks().forEach(t => t.stop());
+      (video.srcObject as MediaStream).getTracks().forEach(t => t.stop());
       video.srcObject = null;
     }
-    setStatus('idle');
-    setMetrics(m => ({ ...m, faceDetected: false, fps: 0 }));
-  }
+    setCamStatus('off');
+    setFrame(null);
+    setFps(0);
+  }, []);
 
-  const isStale = Date.now() - metrics.lastUpdate > 3000;
-  const dataColor = !metrics.faceDetected || isStale
-    ? '#791F1F' : '#27500A';
-  const dataBg = !metrics.faceDetected || isStale
-    ? '#FCEBEB' : '#EAF3DE';
+  const isStale = frame
+    ? Date.now() - frame.timestamp > 4000
+    : false;
+
+  const statusColor = !frame || isStale
+    ? { bg: 'rgba(255,255,255,0.05)', text: 'rgba(255,255,255,0.4)' }
+    : frame.faceDetected
+    ? { bg: '#EAF3DE', text: '#27500A' }
+    : { bg: '#FCEBEB', text: '#791F1F' };
+
+  const metrics = [
+    { label: 'Distance',
+      value: frame ? frame.distanceCm + ' cm' : '—',
+      warn: !!frame && frame.faceDetected && frame.distanceCm < 50 },
+    { label: 'Blink rate',
+      value: frame ? frame.blinkRate + ' /min' : '—',
+      warn: !!frame && frame.faceDetected && frame.blinkRate < 15 },
+    { label: 'Lighting',
+      value: frame ? frame.lux + ' lux' : '—',
+      warn: !!frame && frame.lux < 50 },
+    { label: 'Confidence',
+      value: frame ? frame.confidence + '%' : '—',
+      warn: !!frame && frame.faceDetected && frame.confidence < 60 },
+    { label: 'Ext FPS',
+      value: fps > 0 ? fps : '—',
+      warn: camStatus === 'on' && fps > 0 && fps < 3 },
+    { label: 'Data age',
+      value: frame
+        ? Math.round((Date.now() - frame.timestamp) / 1000) + 's'
+        : '—',
+      warn: isStale && !!frame },
+  ];
 
   return (
-    <div style={{
-      background: 'rgba(255,255,255,0.03)',
-      border: '0.5px solid rgba(255,255,255,0.1)',
-      borderRadius: 12, padding: 16, marginBottom: 12
-    }}>
-      <div style={{
-        fontSize: 13, fontWeight: 500,
-        color: '#fff', marginBottom: 12
-      }}>
-        Camera test panel
+    <div className="glassmorphism p-6 rounded-2xl border border-white/10 mb-8">
+      <div className="flex flex-col mb-4">
+        <h2 className="text-white font-bold text-lg">Camera diagnostics</h2>
+        <p className="text-white/40 text-xs">Verify the extension is detecting your face and sending data.</p>
       </div>
 
-      {/* Video preview */}
-      <div style={{
-        background: '#000', borderRadius: 8, overflow: 'hidden',
-        marginBottom: 12, position: 'relative',
-        aspectRatio: '4/3', maxWidth: 320
-      }}>
-        <video
-          ref={videoRef}
-          autoPlay playsInline muted
-          style={{ width: '100%', height: '100%', objectFit: 'cover',
-            transform: 'scaleX(-1)' /* mirror */
-          }}
-        />
-        {status !== 'active' && (
-          <div style={{
-            position: 'absolute', inset: 0, display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            color: '#888', fontSize: 13
-          }}>
-            {status === 'idle' && 'Camera off'}
-            {status === 'requesting' && 'Starting...'}
-            {status === 'error' && errorMsg}
-          </div>
-        )}
-        {/* FPS badge */}
-        {status === 'active' && (
-          <div style={{
-            position: 'absolute', top: 8, right: 8,
-            background: 'rgba(0,0,0,0.6)', color: '#fff',
-            fontSize: 11, padding: '2px 6px', borderRadius: 6
-          }}>
-            {metrics.fps} fps
-          </div>
-        )}
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Video preview */}
+        <div className="relative aspect-video bg-black rounded-xl border border-white/5 overflow-hidden group">
+          <video ref={videoRef} autoPlay playsInline muted
+            className="w-full h-full object-cover mirror-mode"
+            style={{ display: camStatus === 'on' ? 'block' : 'none' }}
+          />
+          {camStatus !== 'on' && (
+            <div className="absolute inset-0 flex items-center justify-center text-white/20 text-xs italic bg-neutral-900">
+              {camStatus === 'off' && 'Press Start to preview camera'}
+              {camStatus === 'starting' && 'Requesting camera...'}
+              {camStatus === 'error' && (camError || 'Camera error')}
+            </div>
+          )}
+          {camStatus === 'on' && (
+            <div className="absolute top-3 right-3 text-[10px] text-white/50 font-mono bg-black/40 px-2 py-1 rounded">
+              {fps} fps
+            </div>
+          )}
+        </div>
 
-      {/* Controls */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <button
-          onClick={status === 'active' ? stopCamera : startCamera}
-          style={{
-            padding: '7px 16px', borderRadius: 8, fontSize: 13,
-            border: '0.5px solid rgba(255,255,255,0.1)',
-            background: status === 'active' ? '#791F1F22' : 'rgba(255,255,255,0.05)',
-            color: status === 'active' ? '#ff8080' : '#fff',
-            cursor: 'pointer'
-          }}
-        >
-          {status === 'active' ? 'Stop camera' : 'Start camera'}
-        </button>
-        <div style={{
-          padding: '7px 12px', borderRadius: 8, fontSize: 12,
-          background: dataBg, color: dataColor,
-          border: `0.5px solid ${dataColor}22`
-        }}>
-          {!metrics.lastUpdate
-            ? 'Waiting for frames...'
-            : isStale
-            ? 'No frames (stale)'
-            : metrics.faceDetected
-            ? 'Face detected'
-            : 'No face in frame'
-          }
+        {/* Info & Metrics */}
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-2">
+            <button
+              onClick={camStatus === 'on' ? stopCamera : startCamera}
+              disabled={camStatus === 'starting'}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                camStatus === 'on' 
+                ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                : 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+              }`}
+            >
+              {camStatus === 'on' ? 'Stop' : 'Start camera'}
+            </button>
+
+            <div className="px-4 py-2 rounded-xl text-xs font-bold border flex items-center gap-2"
+                 style={{ backgroundColor: statusColor.bg, color: statusColor.text, borderColor: `${statusColor.text}22` }}>
+              <span className={`w-2 h-2 rounded-full ${!frame || isStale ? 'bg-neutral-500' : frame.faceDetected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+              {!frame
+                ? 'Waiting for extension frames...'
+                : isStale
+                ? 'No frames received (stale)'
+                : frame.faceDetected
+                ? 'Face detected'
+                : 'No face in frame'
+              }
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            {metrics.map(({ label, value, warn }) => (
+              <div key={label} className={`p-3 rounded-xl border transition-all ${
+                warn 
+                ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' 
+                : 'bg-white/5 border-white/5 text-white'
+              }`}>
+                <div className="text-[9px] uppercase font-black opacity-40 mb-1">{label}</div>
+                <div className="text-base font-bold">{String(value)}</div>
+              </div>
+            ))}
+          </div>
+
+          {!frame && camStatus === 'on' && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-500 leading-relaxed">
+              <strong>Notice:</strong> Camera is on but no frames from extension yet. 
+              This indicates the extension's monitoring loop is likely paused or stopped.
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Live metrics grid */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
-        gap: 8
-      }}>
-        {[
-          { label: 'Distance', value: metrics.distanceCm + ' cm',
-            warn: metrics.distanceCm > 0 && metrics.distanceCm < 50 },
-          { label: 'Blink rate', value: metrics.blinkRate + ' /min',
-            warn: metrics.blinkRate > 0 && metrics.blinkRate < 15 },
-          { label: 'Lighting', value: metrics.lux + ' lux',
-            warn: metrics.lux > 0 && metrics.lux < 50 },
-          { label: 'Confidence', value: metrics.confidence + '%',
-            warn: metrics.confidence > 0 && metrics.confidence < 60 },
-          { label: 'Frames/sec', value: metrics.fps,
-            warn: status === 'active' && metrics.fps < 3 },
-          { label: 'Data age',
-            value: metrics.lastUpdate
-              ? Math.round((Date.now() - metrics.lastUpdate) / 1000) + 's ago'
-              : '—',
-            warn: isStale && !!metrics.lastUpdate
-          }
-        ].map(({ label, value, warn }) => (
-          <div key={label} style={{
-            background: warn ? '#FAEEDA' : 'rgba(255,255,255,0.05)',
-            borderRadius: 8, padding: '10px 12px'
-          }}>
-            <div style={{
-              fontSize: 11, color: warn ? '#633806' : 'rgba(255,255,255,0.5)',
-              marginBottom: 3
-            }}>{label}</div>
-            <div style={{
-              fontSize: 18, fontWeight: 500,
-              color: warn ? '#633806' : '#fff'
-            }}>{value}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{
-        fontSize: 11, color: 'rgba(255,255,255,0.3)',
-        marginTop: 10, fontStyle: 'italic'
-      }}>
-        This panel reads live frames from the EyeGuard extension.
-        Values update in real time when face is detected.
+      
+      <div className="mt-4 text-[10px] text-white/20 italic">
+        This panel is a passive diagnostic tool. It listens for EYEGUARD_FRAME messages sent by the extension's main-world context.
       </div>
     </div>
   );

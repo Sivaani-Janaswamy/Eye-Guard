@@ -13,6 +13,8 @@ export default function Dashboard() {
   const [isDemoData, setIsDemoData] = useState(false);
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
 
+  console.log('[EyeGuard] Dashboard rendering. Tracking loop status:', !isDemoData);
+
   // Reactive Data Queries
   const scores = useLiveQuery(() => db.scores.orderBy('date').reverse().toArray());
   const alerts = useLiveQuery(() => db.alerts.orderBy('triggeredAt').reverse().limit(10).toArray()) || [];
@@ -97,7 +99,11 @@ export default function Dashboard() {
           </div>
         )}
       </header>
-      <CameraTest />
+      
+      {/* Diagnostics Panel - Always Visible */}
+      <section className="mb-8">
+        <CameraTest />
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
@@ -115,7 +121,7 @@ export default function Dashboard() {
         <div className="lg:col-span-8 flex flex-col gap-8">
           
           {/* Top Section: Charts */}
-          <div className="h-[380px]">
+          <div className="flex flex-col h-[380px] min-h-[300px]">
             <TrendChart scores={displayHistory} />
           </div>
 
