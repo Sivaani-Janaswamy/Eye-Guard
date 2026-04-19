@@ -5,7 +5,7 @@ function weightedLinearRegression(scores: number[], weights: number[]): number {
   const n = scores.length;
   const xs = scores.map((_, i) => i);
   const wSum  = weights.reduce((a, w) => a + w, 0);
-  const wxSum = xs.reduce((a, x, i) => a + w * x, 0);
+  const wxSum = xs.reduce((a, x, i) => a + weights[i] * x, 0);
   const wySum = scores.reduce((a, y, i) => a + weights[i] * y, 0);
   const wxxSum = xs.reduce((a, x, i) => a + weights[i] * x * x, 0);
   const wxySum = xs.reduce((a, x, i) => a + weights[i] * x * scores[i], 0);

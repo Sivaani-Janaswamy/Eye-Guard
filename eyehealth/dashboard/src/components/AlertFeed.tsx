@@ -1,6 +1,6 @@
 import React from 'react';
-import { AlertEvent } from '../../../../extension/db/schema';
-import { db } from '../../../../extension/db/db';
+import type { AlertEvent } from '@extension/db/schema';
+import { db } from '@extension/db/db';
 
 export function AlertFeed({ alerts }: { alerts: AlertEvent[] }) {
   

@@ -20,11 +20,17 @@ class PredictionResponse(BaseModel):
     generated_at: int
     horizon: str
     predicted_risk_level: str
-    confidence: float
+    confidence: str
     trend_slope: float
     key_factors: List[str]
     recommendation: str
     disclaimer: str
+
+def get_confidence_label(conf: float) -> str:
+    if conf <= 0.20: return "Not enough data"
+    if conf <= 0.55: return "Early estimate"
+    if conf <= 0.75: return "Moderate confidence"
+    return "Based on your habit history"
 
 def weighted_linear_regression(scores: list[float], weights: list[float]) -> float:
     if len(scores) == 0: return 0.0
@@ -63,7 +69,7 @@ async def get_latest_prediction(
         generated_at=pred.generated_at,
         horizon=pred.horizon,
         predicted_risk_level=pred.predicted_risk_level,
-        confidence=pred.confidence,
+        confidence=get_confidence_label(pred.confidence),
         trend_slope=pred.trend_slope,
         key_factors=pred.key_factors or [],
         recommendation=pred.recommendation,
@@ -150,7 +156,7 @@ async def generate_prediction(
         generated_at=p.generated_at,
         horizon=p.horizon,
         predicted_risk_level=p.predicted_risk_level,
-        confidence=p.confidence,
+        confidence=get_confidence_label(p.confidence),
         trend_slope=p.trend_slope,
         key_factors=p.key_factors or [],
         recommendation=p.recommendation,

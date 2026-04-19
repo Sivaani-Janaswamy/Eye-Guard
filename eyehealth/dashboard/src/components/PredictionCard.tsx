@@ -1,5 +1,5 @@
 import React from 'react';
-import { PredictionResult } from '../../../../extension/db/schema';
+import type { PredictionResult } from '@extension/db/schema';
 
 export function PredictionCard({ prediction }: { prediction: PredictionResult }) {
   
@@ -33,7 +33,7 @@ export function PredictionCard({ prediction }: { prediction: PredictionResult })
       <div className="flex-1">
         <div className="text-sm font-semibold mb-3 text-white/90">Key Factors:</div>
         <ul className="space-y-2 mb-6">
-          {prediction.keyFactors.map((factor, idx) => (
+          {prediction.keyFactors.map((factor: string, idx: number) => (
             <li key={idx} className="text-xs text-white/70 flex items-start gap-2">
               <span className="text-indigo-400 mt-0.5">•</span>
               <span className="leading-snug">{factor}</span>

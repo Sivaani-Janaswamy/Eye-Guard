@@ -1,4 +1,4 @@
-import { CorrectionProfile } from "../db/schema";
+import type { CorrectionProfile } from "../db/schema";
 
 export const CORRECTION_PRESETS: Record<string, CorrectionProfile> = {
   off:    { contrastBoost: 0,   sharpnessLevel: 0,   fontScaleFactor: 1.0, blueLightFilter: 0,   autoAdjust: false, activePreset: "off" },

@@ -1,5 +1,5 @@
 import React from 'react';
-import { DailyEyeScore } from '../../../../extension/db/schema';
+import type { DailyEyeScore } from '@extension/db/schema';
 
 export function ScoreCard({ scoreData }: { scoreData: DailyEyeScore | null }) {
   const getBadgeStyle = (risk: string) => {

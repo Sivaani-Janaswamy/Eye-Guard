@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '../../../extension/db/db';
-import { DailyEyeScore, AlertEvent, PredictionResult } from '../../../extension/db/schema';
+import { db } from '@extension/db/db';
+import type { DailyEyeScore, AlertEvent, PredictionResult } from '@extension/db/schema';
 import { ScoreCard } from '../components/ScoreCard';
 import { TrendChart } from '../components/TrendChart';
 import { AlertFeed } from '../components/AlertFeed';

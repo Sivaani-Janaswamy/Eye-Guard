@@ -1,6 +1,6 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { DailyEyeScore } from '../../../../extension/db/schema';
+import type { DailyEyeScore } from '@extension/db/schema';
 
 export function TrendChart({ scores }: { scores: DailyEyeScore[] }) {
   // Format for Recharts

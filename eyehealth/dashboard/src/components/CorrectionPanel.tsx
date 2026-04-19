@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../../../extension/db/db';
-import { CorrectionProfile, StoredCorrectionProfile } from '../../../../extension/db/schema';
-import { CORRECTION_PRESETS } from '../../../../extension/correction/display-corrector';
+import { db } from '@extension/db/db';
+import type { CorrectionProfile, StoredCorrectionProfile } from '@extension/db/schema';
+import { CORRECTION_PRESETS } from '@extension/correction/display-corrector';
 
 export function CorrectionPanel() {
   const [profile, setProfile] = useState<StoredCorrectionProfile | null>(null);

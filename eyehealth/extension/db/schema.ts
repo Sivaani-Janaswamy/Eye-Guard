@@ -2,7 +2,7 @@
  * DB Schema & Data Models
  * Follows exact interfaces from SPEC.md Section 5
  */
-import Dexie, { Table } from "dexie";
+import Dexie, { type Table } from "dexie";
 
 export interface SensorFrame {
   timestamp: number;
