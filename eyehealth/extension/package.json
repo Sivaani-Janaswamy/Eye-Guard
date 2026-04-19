@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build:ext": "node -e \"const fs = require('fs'); const path = require('path'); const src = 'node_modules/@mediapipe/face_mesh'; const dst = 'dist/cv'; fs.mkdirSync(dst, { recursive: true }); fs.readdirSync(src).forEach(f => { if (fs.statSync(path.join(src, f)).isFile()) fs.copyFileSync(path.join(src, f), path.join(dst, f)) })\" && esbuild background/service-worker.ts --bundle --outfile=dist/service-worker.js --format=esm --platform=browser && esbuild content/overlay.ts --bundle --outfile=dist/content/overlay.js --platform=browser && esbuild popup/popup.tsx --bundle --outfile=popup/popup.js --platform=browser --jsx=automatic"
+    "build:ext": "node -e \"const fs = require('fs'); const path = require('path'); const src = 'node_modules/@mediapipe/face_mesh'; const dst = 'dist/cv'; fs.mkdirSync(dst, { recursive: true }); fs.readdirSync(src).forEach(f => { if (fs.statSync(path.join(src, f)).isFile()) fs.copyFileSync(path.join(src, f), path.join(dst, f)) })\" && esbuild background/service-worker.ts --bundle --outfile=dist/service-worker.js --format=esm --platform=browser && esbuild content/overlay.ts --bundle --outfile=dist/content/overlay.js --platform=browser && esbuild content/main-world.ts --bundle --outfile=dist/main-world.js --platform=browser && esbuild popup/popup.tsx --bundle --outfile=popup/popup.js --platform=browser --jsx=automatic"
   },
   "keywords": [],
   "author": "",

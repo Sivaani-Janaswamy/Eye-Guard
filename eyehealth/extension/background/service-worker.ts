@@ -1,5 +1,11 @@
 import { db } from "../db/db.js";
 import type { ConsentRecord } from "../db/schema.js";
+import { SessionTracker } from "../engine/session-tracker.js";
+import { AlertEngine } from "../engine/alert-engine.js";
+
+// Initialize engine singletons
+const tracker = new SessionTracker();
+const alertEngine = new AlertEngine();
 
 // Handle startup and installation
 chrome.runtime.onInstalled.addListener(async () => {
@@ -21,13 +27,15 @@ async function checkConsentAndInitialize() {
     const consentCount = await db.consent.count();
     if (consentCount === 0) {
       console.log("No consent record found, opening popup.");
-      // In MV3, chrome.action.openPopup might fail without user gesture.
-      // Fallback to opening a new tab.
       chrome.action.openPopup().catch(() => {
         chrome.tabs.create({ url: "popup/popup.html" });
       });
     } else {
       console.log("Consent record exists.");
+      // Auto-start a session if consent exists
+      if (!tracker.getActiveSession()) {
+        await tracker.startSession();
+      }
     }
   } catch (error) {
     console.error("Error during consent check:", error);
@@ -84,11 +92,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     };
     db.consent.clear()
       .then(() => db.consent.add(record))
-      .then(() => {
-        // Only broadcast AFTER write is confirmed committed
+      .then(async () => {
+        // Confirm committed
         sendResponse({ success: true });
-        // Small delay ensures IndexedDB transaction is fully flushed 
-        // before content scripts query it
+        
+        // Start tracking session
+        if (!tracker.getActiveSession()) {
+          await tracker.startSession();
+        }
+
         setTimeout(() => {
           chrome.tabs.query({}, (tabs) => {
             tabs.forEach(tab => {
@@ -102,6 +114,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
       .catch(() => sendResponse({ success: false }));
     return true;
+  }
+
+  // Handle data-heavy pipeline messages
+  if (message.type === 'SENSOR_FRAME') {
+    const frame = message.payload;
+    const session = tracker.getActiveSession();
+    
+    // Log for verification (User UX requirement)
+    console.log('[EyeGuard] SENSOR_FRAME:', frame);
+
+    if (session) {
+      // 1. Log to trackable session
+      tracker.addFrame(frame);
+      
+      // 2. Evaluate for health alerts
+      const durationMs = Date.now() - session.startTime;
+      const alert = alertEngine.evaluateFrame(frame, durationMs);
+      
+      if (alert && sender.tab?.id) {
+        chrome.tabs.sendMessage(sender.tab.id, { type: 'SHOW_ALERT', alert })
+          .catch(() => {});
+      }
+    }
+    return false; // No async response needed
   }
 
   switch (message.type) {
@@ -123,14 +159,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
       });
       break;
+    case "ALERT_DISMISSED":
+      if (message.payload?.alertId) {
+        alertEngine.dismissAlert(message.payload.alertId);
+      }
+      break;
+    case "ALERT_SNOOZED":
+      if (message.payload?.alertId && message.payload?.minutes) {
+        alertEngine.snoozeAlert(message.payload.alertId, message.payload.minutes);
+      }
+      break;
     case "START_SESSION":
-      console.log("START_SESSION received", message.payload);
+      tracker.startSession();
       break;
     case "END_SESSION":
-      console.log("END_SESSION received", message.payload);
-      break;
-    case "LOG_ALERT":
-      console.log("LOG_ALERT received", message.payload);
+      if (tracker.getActiveSession()) {
+        tracker.endSession(tracker.getActiveSession()!.sessionId);
+      }
       break;
     default:
       break;

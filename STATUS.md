@@ -25,6 +25,8 @@
 - **Module B**: Architecture fix — content script DB isolation implemented via message passing to background script for consent verification.
 - **General**: Fixed consent race condition — DB write now completes before broadcast, toArray() replaces orderBy().last().
 - **Module D**: CSP Fix — MediaPipe assets (JS/WASM) are now bundled locally within the extension (`dist/cv/`) to bypass website security policies.
+- **General**: Full end-to-end monitoring pipeline integrated (`overlay.ts` -> `service-worker.ts` -> `SessionTracker`/`AlertEngine`). Real-time UI feedback via snackbars added.
+- **General**: Resolved persistent MediaPipe 404s by implementing a global Network Interceptor in `overlay.ts` that hijacks and redirects relative asset fetches to the extension origin.
 
 ## BLOCKERS
 <!-- Log anything blocking progress -->

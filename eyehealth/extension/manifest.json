@@ -47,7 +47,14 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["dist/*", "dashboard/*", "dist/cv/*"],
+      "resources": [
+        "dist/main-world.js",
+        "dist/cv/*.js",
+        "dist/cv/*.wasm",
+        "dist/cv/*.data",
+        "dist/cv/*.binarypb",
+        "dashboard/*"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

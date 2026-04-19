@@ -13,20 +13,27 @@ export class FaceMeshProcessor {
   constructor() {
     this.blinkDetector = new BlinkDetector();
     
-    this.faceMesh = new FaceMesh({
-      locateFile: (file: string) => {
-        return chrome.runtime.getURL(`dist/cv/${file}`);
-      }
-    });
+    try {
+      this.faceMesh = new FaceMesh({
+        locateFile: (file: string) => {
+          const url = chrome.runtime.getURL(`dist/cv/${file}`);
+          console.log(`[EyeGuard] MediaPipe requesting: ${file} -> ${url}`);
+          return url;
+        }
+      });
 
-    const options: Options = {
-      maxNumFaces: 1,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    };
-    
-    this.faceMesh.setOptions(options);
+      const options: Options = {
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      };
+      
+      this.faceMesh.setOptions(options);
+    } catch (e) {
+      console.error("[EyeGuard] Failed to initialize FaceMesh:", e);
+      throw new Error("AI Vision Initialization Failed");
+    }
 
     this.canvas = document.createElement('canvas');
     // Compute lighting on a small downsampled frame for performance
@@ -43,6 +50,9 @@ export class FaceMeshProcessor {
   public async processFrame(videoElement: HTMLVideoElement): Promise<SensorFrame> {
     return new Promise((resolve) => {
       this.faceMesh.onResults((results: Results) => {
+        if (Math.random() < 0.05) {
+          console.log('[EyeGuard] MediaPipe results received:', results);
+        }
         // Evaluate lighting while we process
         const luxLevel = this.estimateAmbientLux(videoElement);
 
