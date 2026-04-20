@@ -10,6 +10,8 @@ import { CorrectionPanel } from '../components/CorrectionPanel';
 import CameraTest from '../components/CameraTest';
 
 export default function Dashboard() {
+  // VERSION: 2026-04-19
+  console.log('[EyeGuard] Dashboard version: 2026-04-19');
   const [isDemoData, setIsDemoData] = useState(false);
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
 
@@ -87,8 +89,8 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">EyeGuard Dashboard</h1>
           <p className="text-white/50 text-sm mt-1">Holistic tracking map for optical longevity. (Distance: <span className="text-indigo-400 font-mono">{liveDistance}</span>)</p>
+          <span className="text-xs text-indigo-400 font-mono">Build: 2026-04-19</span>
         </div>
-        
         {isDemoData && (
           <div className="bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-semibold text-xs px-4 py-2 rounded-full flex items-center gap-2">
              <span className="relative flex h-2 w-2">

@@ -615,8 +615,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     initializeCameraLoop(); // idempotent guard inside prevents double-start
   }
   if (message.type === 'STOP_CAMERA' || message.type === 'STOP_MONITORING') {
-    console.log('[EyeGuard:overlay] STOP message received:', message.type);
-    stopCameraLoop();
+    console.log('[EyeGuard:overlay] STOP message received — verifying consent');
+    
+    // Ask SW to re-check consent before obeying
+    chrome.runtime.sendMessage({ type: 'CHECK_CONSENT' }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn('[EyeGuard:overlay] Could not reach SW for consent check');
+        return;
+      }
+      
+      if (response?.granted === true) {
+        // SW was wrong or DB was just slow — consent exists, ignore the stop
+        console.log('[EyeGuard:overlay] STOP message ignored — consent is valid');
+        return;
+      }
+      
+      // Consent genuinely missing — stop
+      console.log('[EyeGuard:overlay] STOP message confirmed — stopping');
+      stopCameraLoop();
+    });
   }
   if (message.type === 'SHOW_ALERT') {
     if (message.alert) injectAlert(message.alert);

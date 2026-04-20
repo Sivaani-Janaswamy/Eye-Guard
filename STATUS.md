@@ -42,8 +42,19 @@
 - **Data Persistence & Buffering**: Service Worker now buffers frames and updates high-level session metrics every 50 frames.
 - **Real-time Scoring**: Implemented a periodic `RECOMPUTE_SCORE` alarm (1 minute) to ensure the health score reflects active monitoring data.
 
+### Stability & Diagnostics (2026-04-19 Post-Hoc)
+- **Resolved Master Race Condition**: Added 500ms delay to SW consent checks and re-verification logic in content scripts, preventing premature camera shutdowns.
+- **Passive Diagnostics**: Rewrote `CameraTest.tsx` to remove MediaPipe dependency. It now correctly visualizes data from the extension via window messages.
+- **Chart Stabilization**: Enforced explicit pixel heights on `ResponsiveContainer` parents to prevent Recharts rendering crashes.
+- **Hibernation Resilience**: Implemented session state persistence in `chrome.storage.local`. `activeSessionId` now survives Service Worker restarts.
+- **Demo Optimization**: Lowered alert cooldown to 30 seconds and increased caps for high-reactivity demos.
+
 ## BLOCKERS
-<!-- Log anything blocking progress -->
+- None. Pipeline is stable and end-to-end monitoring is confirmed.
 
 ## TEST RESULTS
-<!-- Log test pass/fail results per module -->
+- **Build Extension**: PASS
+- **Build Dashboard**: PASS
+- **SW Consent Logic**: PASS (Delayed verification prevents race)
+- **Passive UI Bridge**: PASS (CameraTest correctly reflects extension frames)
+- **Hibernation Re-hydration**: PASS (Logs confirm re-hydrated session ID on SW wake)

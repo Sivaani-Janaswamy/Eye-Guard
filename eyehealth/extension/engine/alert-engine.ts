@@ -7,8 +7,8 @@ const DEFAULT_THRESHOLDS = {
   blinkRateMinimum: 15,          // alert if < 15 bpm for > 60s
   luxMinimum: 50,                // alert if lux < 50 for > 30s
   continuousUsageMinutes: 20,    // 20-20-20 rule trigger
-  alertCooldownSeconds: 300,     // min 5min between same alert type
-  maxAlertsPerHour: 4,           // anti-annoyance cap
+  alertCooldownSeconds: 30,      // Reduced to 30s for demo reactivity
+  maxAlertsPerHour: 20,           // Increased for demo purposes
 };
 
 const ALERT_MESSAGES = {

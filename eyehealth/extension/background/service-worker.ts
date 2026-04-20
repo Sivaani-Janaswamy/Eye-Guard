@@ -27,10 +27,25 @@ async function safeDbCall<T>(
   }
 }
 
-// In-memory buffer for high-frequency processing
+// PERSISTENT STATE CACHE (survives hibernation via storage sync)
 let frameBuffer: SensorFrame[] = [];
 let activeSessionId: string | null = null;
 let sessionStartTime: number | null = null;
+let isHydrated = false;
+
+/**
+ * Loads session state from local storage to survive SW restarts.
+ */
+async function hydrateState() {
+  if (isHydrated) return;
+  const state = await chrome.storage.local.get(['activeSessionId', 'sessionStartTime']);
+  if (state.activeSessionId) {
+    activeSessionId = state.activeSessionId;
+    sessionStartTime = state.sessionStartTime;
+    console.log('[EyeGuard:SW] Re-hydrated session:', activeSessionId);
+  }
+  isHydrated = true;
+}
 
 self.addEventListener('install', () => {
   console.log('[EyeGuard:SW] Installing');
@@ -41,7 +56,13 @@ self.addEventListener('install', () => {
 self.addEventListener('activate', (event) => {
   console.log('[EyeGuard:SW] Activated');
   // @ts-ignore
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      hydrateState(),
+      checkConsentAndAct()
+    ])
+  );
 });
 
 // Handle startup and installation
@@ -55,7 +76,8 @@ chrome.runtime.onInstalled.addListener(async () => {
 
   await setupMidnightAlarm();
   await setupRecomputeAlarm();
-  await checkConsentAndInitialize();
+  await hydrateState();
+  await checkConsentAndAct();
 });
 
 async function setupRecomputeAlarm() {
@@ -64,29 +86,47 @@ async function setupRecomputeAlarm() {
 
 chrome.runtime.onStartup.addListener(async () => {
   console.log("EyeGuard Extension Started");
-  await checkConsentAndInitialize();
+  await hydrateState();
+  await checkConsentAndAct();
 });
 
 /**
- * Checks if user has provided consent. If not, opens the popup to prompt for it.
+ * Checks if user has provided consent. If not, sends STOP_CAMERA.
+ * Added delay to prevent race condition before DB is fully ready.
  */
-async function checkConsentAndInitialize() {
+async function checkConsentAndAct() {
+  console.log('[EyeGuard:SW] Starting consent check (with 500ms delay)...');
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
   try {
-    const consentCount = await db.consent.count();
-    if (consentCount === 0) {
-      console.log("No consent record found, opening popup.");
-      chrome.action.openPopup().catch(() => {
-        chrome.tabs.create({ url: "popup/popup.html" });
+    const records = await db.consent.toArray();
+    const hasConsent = records.some(r => r.cameraGranted === true);
+    
+    console.log('[EyeGuard:SW] Consent result:', hasConsent, '| Records:', records.length);
+    
+    if (!hasConsent) {
+      console.log('[EyeGuard:SW] No consent record found — sending STOP_CAMERA');
+      chrome.tabs.query({}, tabs => {
+        tabs.forEach(tab => {
+          if (tab.id) {
+            chrome.tabs.sendMessage(tab.id, { type: 'STOP_CAMERA' })
+              .catch(() => {});
+          }
+        });
       });
+
+      // No consent record — optional: prompt via popup if strictly needed,
+      // but usually we wait for user to open it manually.
     } else {
-      console.log("Consent record exists.");
-      // Auto-start a session if consent exists
+      console.log('[EyeGuard:SW] Consent confirmed — monitoring may proceed');
       if (!tracker.getActiveSession()) {
-        await tracker.startSession();
+        await tracker.startSession().catch(() => {});
       }
     }
-  } catch (error) {
-    console.error("Error during consent check:", error);
+  } catch (err) {
+    console.error('[EyeGuard:SW] Consent check failed (DB error):', err);
+    // FAIL OPEN: If DB crashes, do not stop the camera loop. 
+    // This allows existing sessions to continue.
   }
 }
 
@@ -163,10 +203,12 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       backendSyncEnabled: false,
       dataRetentionDays: 90,
     };
-    db.consent.clear()
+
+    // Ensure DB is open and clear/add consent
+    db.open()
+      .then(() => db.consent.clear())
       .then(() => db.consent.add(record))
       .then(async () => {
-        // Confirm committed
         sendResponse({ success: true });
         
         // Start tracking session
@@ -185,12 +227,17 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
           });
         }, 100);
       })
-      .catch(() => sendResponse({ success: false }));
+      .catch((err) => {
+        console.error('[EyeGuard:SW] GRANT_CONSENT failed:', err);
+        sendResponse({ success: false });
+      });
     return true;
   }
 
   // Handle data-heavy pipeline messages
   if (message.type === 'SENSOR_FRAME') {
+    if (!isHydrated) await hydrateState();
+    
     const frame: SensorFrame = message.payload;
     frameBuffer.push(frame);
 
@@ -263,6 +310,9 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       frameBuffer = [];
       console.log('[EyeGuard:SW] Session started:', activeSessionId);
 
+      // Persist for hibernation
+      await chrome.storage.local.set({ activeSessionId, sessionStartTime });
+
       db.sessions.add({
         sessionId: activeSessionId,
         startTime: sessionStartTime,
@@ -284,6 +334,9 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       if (tracker.getActiveSession()) {
         tracker.endSession(tracker.getActiveSession()!.sessionId);
       }
+      activeSessionId = null;
+      sessionStartTime = null;
+      await chrome.storage.local.remove(['activeSessionId', 'sessionStartTime']);
       break;
     default:
       break;

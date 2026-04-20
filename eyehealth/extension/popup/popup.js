@@ -27814,10 +27814,9 @@
           if (score >= 50) return "#ffc107";
           return "#dc3545";
         };
-        const handleToggleMonitoring = () => {
-          const newState = !isMonitoring;
-          setIsMonitoring(newState);
-          const msgType = newState ? "START_MONITORING" : "STOP_MONITORING";
+        const handleToggleMonitoring = (newVal) => {
+          setIsMonitoring(newVal);
+          const msgType = newVal ? "START_MONITORING" : "STOP_MONITORING";
           chrome.runtime.sendMessage({ type: msgType });
         };
         const handleCorrectionPreset = async (presetId) => {
@@ -27878,7 +27877,7 @@
             title: `Switch to ${isDark ? "Light" : "Dark"} Mode`
           },
           isDark ? "\u2600\uFE0F" : "\u{1F319}"
-        ), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", cursor: "pointer" } }, /* @__PURE__ */ import_react.default.createElement("input", { type: "checkbox", checked: isMonitoring, onChange: handleToggleMonitoring }), " Active"), /* @__PURE__ */ import_react.default.createElement("span", { style: { cursor: "pointer", fontSize: "16px" }, onClick: () => setShowSettings(!showSettings) }, "\u2699\uFE0F"))), !showSettings ? /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { style: {
+        ), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", cursor: "pointer" } }, /* @__PURE__ */ import_react.default.createElement("input", { type: "checkbox", checked: isMonitoring, onChange: (e) => handleToggleMonitoring(e.target.checked) }), " Active"), /* @__PURE__ */ import_react.default.createElement("span", { style: { cursor: "pointer", fontSize: "16px" }, onClick: () => setShowSettings(!showSettings) }, "\u2699\uFE0F"))), !showSettings ? /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { style: {
           textAlign: "center",
           padding: "12px",
           background: colors.card,

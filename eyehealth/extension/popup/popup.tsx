@@ -102,10 +102,9 @@ function Popup() {
     return "#dc3545"; // red
   };
 
-  const handleToggleMonitoring = () => {
-    const newState = !isMonitoring;
-    setIsMonitoring(newState);
-    const msgType = newState ? "START_MONITORING" : "STOP_MONITORING";
+  const handleToggleMonitoring = (newVal: boolean) => {
+    setIsMonitoring(newVal);
+    const msgType = newVal ? "START_MONITORING" : "STOP_MONITORING";
     chrome.runtime.sendMessage({ type: msgType });
   };
 
@@ -178,7 +177,7 @@ function Popup() {
             {isDark ? "☀️" : "🌙"}
           </span>
           <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", cursor: "pointer" }}>
-            <input type="checkbox" checked={isMonitoring} onChange={handleToggleMonitoring} /> Active
+            <input type="checkbox" checked={isMonitoring} onChange={(e) => handleToggleMonitoring(e.target.checked)} /> Active
           </label>
           <span style={{ cursor: "pointer", fontSize: "16px" }} onClick={() => setShowSettings(!showSettings)}>⚙️</span>
         </div>
