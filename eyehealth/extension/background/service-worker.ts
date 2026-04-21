@@ -6,14 +6,13 @@ import { ScoreEngine } from "../engine/score-engine.js";
 import { nanoid } from "nanoid";
 import { SensorFrame } from "../db/schema.js";
 
-// Initialize engine singletons
 const tracker = new SessionTracker();
 const alertEngine = new AlertEngine();
 const scoreEngine = new ScoreEngine();
 
 console.log('[EyeGuard:SW] Service worker script loaded');
 
-// Safe DB access wrapper — never crashes the SW
+// -------------------- SAFE DB WRAPPER --------------------
 async function safeDbCall<T>(
   fn: () => Promise<T>, 
   fallback: T,
@@ -27,26 +26,34 @@ async function safeDbCall<T>(
   }
 }
 
-// PERSISTENT STATE CACHE (survives hibernation via storage sync)
+// -------------------- STATE --------------------
 let frameBuffer: SensorFrame[] = [];
 let activeSessionId: string | null = null;
 let sessionStartTime: number | null = null;
 let isHydrated = false;
 
-/**
- * Loads session state from local storage to survive SW restarts.
- */
+// 🔴 NEW: prevents duplicate consent checks
+let isCheckingConsent = false;
+
+// -------------------- HYDRATION --------------------
 async function hydrateState() {
   if (isHydrated) return;
-  const state = await chrome.storage.local.get(['activeSessionId', 'sessionStartTime']);
+
+  const state = await chrome.storage.local.get([
+    'activeSessionId',
+    'sessionStartTime'
+  ]);
+
   if (state.activeSessionId) {
     activeSessionId = state.activeSessionId;
     sessionStartTime = state.sessionStartTime;
     console.log('[EyeGuard:SW] Re-hydrated session:', activeSessionId);
   }
+
   isHydrated = true;
 }
 
+// -------------------- LIFECYCLE --------------------
 self.addEventListener('install', () => {
   console.log('[EyeGuard:SW] Installing');
   // @ts-ignore
@@ -55,84 +62,103 @@ self.addEventListener('install', () => {
 
 self.addEventListener('activate', (event) => {
   console.log('[EyeGuard:SW] Activated');
+
   // @ts-ignore
   event.waitUntil(
     Promise.all([
       self.clients.claim(),
-      hydrateState(),
-      checkConsentAndAct()
-    ])
+      hydrateState()
+    ]).then(() => checkConsentAndAct())
   );
 });
 
-// Handle startup and installation
+// -------------------- INSTALL --------------------
 chrome.runtime.onInstalled.addListener(async () => {
   console.log("EyeGuard Extension Installed");
-  
-  // Set default settings if not already present
+
   const settings = await chrome.storage.local.get(["theme", "isMonitoring"]);
   if (!settings.theme) await chrome.storage.local.set({ theme: "light" });
-  if (settings.isMonitoring === undefined) await chrome.storage.local.set({ isMonitoring: true });
+  if (settings.isMonitoring === undefined) {
+    await chrome.storage.local.set({ isMonitoring: true });
+  }
 
   await setupMidnightAlarm();
   await setupRecomputeAlarm();
   await hydrateState();
-  await checkConsentAndAct();
 });
 
-async function setupRecomputeAlarm() {
-    await chrome.alarms.create('RECOMPUTE_SCORE', { periodInMinutes: 1 });
-}
-
+// -------------------- STARTUP --------------------
 chrome.runtime.onStartup.addListener(async () => {
   console.log("EyeGuard Extension Started");
   await hydrateState();
-  await checkConsentAndAct();
 });
 
-/**
- * Checks if user has provided consent. If not, sends STOP_CAMERA.
- * Added delay to prevent race condition before DB is fully ready.
- */
+// -------------------- CONSENT LOGIC --------------------
 async function checkConsentAndAct() {
-  console.log('[EyeGuard:SW] Starting consent check (with 500ms delay)...');
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
+  if (isCheckingConsent) {
+    console.log('[EyeGuard:SW] Skipping duplicate consent check');
+    return;
+  }
+
+  isCheckingConsent = true;
+
+  console.log('[EyeGuard:SW] Starting consent check (2000ms delay)...');
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
   try {
     const records = await db.consent.toArray();
     const hasConsent = records.some(r => r.cameraGranted === true);
-    
-    console.log('[EyeGuard:SW] Consent result:', hasConsent, '| Records:', records.length);
-    
+
+    console.log(
+      '[EyeGuard:SW] Consent result:',
+      hasConsent,
+      '| Records:',
+      records.length
+    );
+
     if (!hasConsent) {
-      console.log('[EyeGuard:SW] No consent record found — sending STOP_CAMERA');
+      console.log('[EyeGuard:SW] STOP_CAMERA (no consent)');
       chrome.tabs.query({}, tabs => {
         tabs.forEach(tab => {
           if (tab.id) {
-            chrome.tabs.sendMessage(tab.id, { type: 'STOP_CAMERA' })
+            chrome.tabs
+              .sendMessage(tab.id, { type: 'STOP_CAMERA' })
               .catch(() => {});
           }
         });
       });
-
-      // No consent record — optional: prompt via popup if strictly needed,
-      // but usually we wait for user to open it manually.
     } else {
-      console.log('[EyeGuard:SW] Consent confirmed — monitoring may proceed');
+      console.log('[EyeGuard:SW] START_CAMERA (consent OK)');
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        if (tab.id) {
+          chrome.tabs
+            .sendMessage(tab.id, { type: 'START_CAMERA' })
+            .catch(() => {});
+        }
+      }
+
       if (!tracker.getActiveSession()) {
         await tracker.startSession().catch(() => {});
       }
     }
   } catch (err) {
-    console.error('[EyeGuard:SW] Consent check failed (DB error):', err);
-    // FAIL OPEN: If DB crashes, do not stop the camera loop. 
-    // This allows existing sessions to continue.
+    console.error('[EyeGuard:SW] Consent check failed:', err);
+  } finally {
+    isCheckingConsent = false;
   }
 }
 
-/**
- * Sets an alarm to trigger the daily score computation at midnight.
- */
+// -------------------- DB INIT --------------------
+db.open()
+  .then(() => {
+    console.log('[EyeGuard:SW] Database opened successfully');
+  })
+  .catch(err => {
+    console.error('[EyeGuard:SW] Database failed to open:', err);
+  });
+
+// -------------------- ALARMS --------------------
 async function setupMidnightAlarm() {
   await chrome.alarms.clear("COMPUTE_DAILY_SCORE");
 
@@ -141,30 +167,36 @@ async function setupMidnightAlarm() {
     now.getFullYear(),
     now.getMonth(),
     now.getDate() + 1,
-    0, 1, 0 // 1 minute past midnight
+    0, 1, 0
   );
 
   chrome.alarms.create("COMPUTE_DAILY_SCORE", {
     when: midnight.getTime(),
-    periodInMinutes: 24 * 60 // Repeat every 24 hours
+    periodInMinutes: 24 * 60
   });
+
   console.log(`Midnight alarm set for: ${midnight.toISOString()}`);
+}
+
+async function setupRecomputeAlarm() {
+  await chrome.alarms.create('RECOMPUTE_SCORE', { periodInMinutes: 1 });
 }
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "COMPUTE_DAILY_SCORE") {
-    console.log("Triggering daily score computation (Midnight)");
+    console.log("Triggering daily score computation");
     await scoreEngine.getTodayScore();
   }
 
   if (alarm.name === 'RECOMPUTE_SCORE') {
     const today = new Date().toISOString().split('T')[0];
     const startDate = new Date(`${today}T00:00:00`);
+
     const sessions = await db.sessions
       .where('startTime')
       .aboveOrEqual(startDate.getTime())
       .toArray();
-    
+
     if (sessions.length > 0) {
       const score = await scoreEngine.getTodayScore();
       console.log('[EyeGuard:SW] Daily score recomputed:', score.score);
@@ -172,173 +204,111 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
-// Handle messages from content script
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-  if (message.type === 'KEEPALIVE') {
-    // Just responding is enough to reset the 30s idle timer
-    sendResponse({ alive: true, sessionActive: !!activeSessionId });
-    return true;
-  }
-
-  if (message.type === 'PING') {
-    sendResponse({ alive: true, sessionId: activeSessionId });
-    return true;
-  }
+// -------------------- MESSAGES --------------------
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'CHECK_CONSENT') {
-    db.consent.toArray()
-      .then(records => {
+    (async () => {
+      try {
+        if (!db.isOpen()) await db.open();
+        const records = await db.consent.toArray();
         const granted = records.some(r => r.cameraGranted === true);
+
+        console.log('[EyeGuard:SW] CHECK_CONSENT:', granted);
         sendResponse({ granted });
-      })
-      .catch(() => sendResponse({ granted: false }));
+
+      } catch (err) {
+        console.error('[EyeGuard:SW] CHECK_CONSENT error:', err);
+        sendResponse({ granted: false });
+      }
+    })();
+
     return true;
   }
 
   if (message.type === 'GRANT_CONSENT') {
-    const record: ConsentRecord = {
-      consentedAt: Date.now(),
-      consentVersion: '1.0',
-      cameraGranted: true,
-      backendSyncEnabled: false,
-      dataRetentionDays: 90,
-    };
+    (async () => {
+      try {
+        if (!db.isOpen()) await db.open();
 
-    // Ensure DB is open and clear/add consent
-    db.open()
-      .then(() => db.consent.clear())
-      .then(() => db.consent.add(record))
-      .then(async () => {
-        sendResponse({ success: true });
-        
-        // Start tracking session
-        if (!tracker.getActiveSession()) {
-          await tracker.startSession();
+        await db.consent.clear();
+
+        await db.consent.add({
+          consentedAt: Date.now(),
+          consentVersion: '1.0',
+          cameraGranted: true,
+          backendSyncEnabled: false,
+          dataRetentionDays: 90
+        });
+
+        const saved = await db.consent.toArray();
+
+        if (saved.length === 0) {
+          throw new Error('Consent write failed');
         }
 
-        setTimeout(() => {
-          chrome.tabs.query({}, (tabs) => {
-            tabs.forEach(tab => {
-              if (tab.id) {
-                chrome.tabs.sendMessage(tab.id, { type: 'CONSENT_GRANTED' })
-                  .catch(() => {});
-              }
-            });
-          });
-        }, 100);
-      })
-      .catch((err) => {
-        console.error('[EyeGuard:SW] GRANT_CONSENT failed:', err);
+        console.log('[EyeGuard:SW] Consent saved');
+
+        // ✅ FIXED: only ONE START_CAMERA broadcast
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+          if (tab.id) {
+            chrome.tabs
+              .sendMessage(tab.id, { type: 'START_CAMERA' })
+              .catch(() => {});
+          }
+        }
+
+        sendResponse({ success: true });
+
+      } catch (err) {
+        console.error('[EyeGuard:SW] GRANT_CONSENT error:', err);
         sendResponse({ success: false });
-      });
+      }
+    })();
+
     return true;
   }
 
-  // Handle data-heavy pipeline messages
   if (message.type === 'SENSOR_FRAME') {
-    if (!isHydrated) await hydrateState();
-    
-    const frame: SensorFrame = message.payload;
-    frameBuffer.push(frame);
+    (async () => {
+      if (!isHydrated) await hydrateState();
 
-    // Always write live stats — this is what the UI polls
-    db.table('live_stats').put({
-      id: 1,
-      distanceCm:   Math.round(frame.screenDistanceCm),
-      blinkRate:    parseFloat(frame.blinkRate.toFixed(1)),
-      lux:          Math.round(frame.ambientLuxLevel),
-      faceDetected: frame.faceDetected,
-      updatedAt:    Date.now()
-    }).catch(() => {});
+      const frame: SensorFrame = message.payload;
+      frameBuffer.push(frame);
 
-    // Update session averages every 25 frames (~5 seconds at 5fps)
-    if (frameBuffer.length % 25 === 0 && activeSessionId) {
-      const faced = frameBuffer.slice(-25).filter(f => f.faceDetected);
-      if (faced.length > 0) {
-        const avgDist  = faced.reduce((s,f) => s + f.screenDistanceCm, 0) / faced.length;
-        const avgBlink = faced.reduce((s,f) => s + f.blinkRate, 0) / faced.length;
-        const avgLux   = frameBuffer.slice(-25).reduce((s,f) => s + f.ambientLuxLevel, 0) / 25;
+      db.table('live_stats').put({
+        id: 1,
+        distanceCm: Math.round(frame.screenDistanceCm),
+        blinkRate: parseFloat(frame.blinkRate.toFixed(1)),
+        lux: Math.round(frame.ambientLuxLevel),
+        faceDetected: frame.faceDetected,
+        landmarks: frame.landmarks,
+        updatedAt: Date.now()
+      }).catch(() => {});
 
-        await db.sessions.update(activeSessionId, {
-          durationMs:      Date.now() - (sessionStartTime ?? Date.now()),
-          avgDistanceCm:   parseFloat(avgDist.toFixed(1)),
-          avgBlinkRate:    parseFloat(avgBlink.toFixed(1)),
-          avgLuxLevel:     Math.round(avgLux),
-          endTime:         Date.now()
-        }).catch(() => {});
-        
-        console.log('[EyeGuard:SW] Session batched — dist:', Math.round(avgDist), 'blink:', Math.round(avgBlink));
+      if (frameBuffer.length % 25 === 0 && activeSessionId) {
+        const faced = frameBuffer.slice(-25).filter(f => f.faceDetected);
+
+        if (faced.length > 0) {
+          const avgDist = faced.reduce((s,f)=>s+f.screenDistanceCm,0)/faced.length;
+          const avgBlink = faced.reduce((s,f)=>s+f.blinkRate,0)/faced.length;
+          const avgLux = frameBuffer.slice(-25).reduce((s,f)=>s+f.ambientLuxLevel,0)/25;
+
+          await db.sessions.update(activeSessionId, {
+            durationMs: Date.now() - (sessionStartTime ?? Date.now()),
+            avgDistanceCm: parseFloat(avgDist.toFixed(1)),
+            avgBlinkRate: parseFloat(avgBlink.toFixed(1)),
+            avgLuxLevel: Math.round(avgLux),
+            endTime: Date.now()
+          }).catch(() => {});
+        }
       }
-    }
 
-    sendResponse({ ok: true });
+      sendResponse({ ok: true });
+    })();
+
     return true;
   }
 
-  switch (message.type) {
-    case "START_MONITORING":
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach(tab => {
-          if (tab.id) {
-            chrome.tabs.sendMessage(tab.id, { type: 'CONSENT_GRANTED' }).catch(() => {});
-          }
-        });
-      });
-      break;
-    case "STOP_MONITORING":
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach(tab => {
-          if (tab.id) {
-            chrome.tabs.sendMessage(tab.id, { type: 'STOP_CAMERA' }).catch(() => {});
-          }
-        });
-      });
-      break;
-    case "ALERT_DISMISSED":
-      if (message.payload?.alertId) {
-        alertEngine.dismissAlert(message.payload.alertId);
-      }
-      break;
-    case "ALERT_SNOOZED":
-      if (message.payload?.alertId && message.payload?.minutes) {
-        alertEngine.snoozeAlert(message.payload.alertId, message.payload.minutes);
-      }
-      break;
-    case "START_SESSION":
-      activeSessionId = nanoid();
-      sessionStartTime = Date.now();
-      frameBuffer = [];
-      console.log('[EyeGuard:SW] Session started:', activeSessionId);
-
-      // Persist for hibernation
-      await chrome.storage.local.set({ activeSessionId, sessionStartTime });
-
-      db.sessions.add({
-        sessionId: activeSessionId,
-        startTime: sessionStartTime,
-        endTime: null,
-        durationMs: 0,
-        avgDistanceCm: 0,
-        avgBlinkRate: 0,
-        avgLuxLevel: 0,
-        breaksTaken: 0,
-        alertsTriggered: 0,
-        platform: 'chrome-extension'
-      }).then(() => {
-          sendResponse({ sessionId: activeSessionId });
-      }).catch(() => {
-          sendResponse({ error: 'Failed to start session' });
-      });
-      return true; // async response
-    case "END_SESSION":
-      if (tracker.getActiveSession()) {
-        tracker.endSession(tracker.getActiveSession()!.sessionId);
-      }
-      activeSessionId = null;
-      sessionStartTime = null;
-      await chrome.storage.local.remove(['activeSessionId', 'sessionStartTime']);
-      break;
-    default:
-      break;
-  }
 });

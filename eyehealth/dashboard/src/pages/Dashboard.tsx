@@ -11,22 +11,13 @@ import CameraTest from '../components/CameraTest';
 
 export default function Dashboard() {
   // VERSION: 2026-04-19
-  console.log('[EyeGuard] Dashboard version: 2026-04-19');
   const [isDemoData, setIsDemoData] = useState(false);
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
 
-  console.log('[EyeGuard] Dashboard rendering. Tracking loop status:', !isDemoData);
-
   // Reactive Data Queries
-  const scores = useLiveQuery(() => db.scores.orderBy('date').reverse().toArray());
-  const alerts = useLiveQuery(() => db.alerts.orderBy('triggeredAt').reverse().limit(10).toArray()) || [];
-  const liveStats = useLiveQuery(
-    async () => {
-      try {
-        return await (db as any).live_stats.get(1);
-      } catch { return null; }
-    }
-  );
+  const scores = useLiveQuery(() => db.scores.orderBy('date').reverse().toArray(), []);
+  const alerts = useLiveQuery(() => db.alerts.orderBy('triggeredAt').reverse().limit(10).toArray(), []);
+  const liveStats = useLiveQuery(() => (db as any).live_stats.get(1), []);
 
   // Prediction load (not reactive as it changes slowly)
   useEffect(() => {
@@ -50,6 +41,11 @@ export default function Dashboard() {
       setIsDemoData(true);
     }
   }, [scores]);
+
+  // Log dashboard mount and tracking status only when trackingActive changes
+  useEffect(() => {
+    console.log('[EyeGuard] Dashboard rendering...');
+  }, []);
 
   function generateDemoHistory() {
     return Array.from({ length: 30 }).map((_, i) => ({
@@ -101,14 +97,11 @@ export default function Dashboard() {
           </div>
         )}
       </header>
-      
       {/* Diagnostics Panel - Always Visible */}
       <section className="mb-8">
         <CameraTest />
       </section>
-
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
         {/* Left Column: Immediate status & Predictions */}
         <div className="lg:col-span-4 flex flex-col gap-8">
           <div className="h-[380px]">
@@ -118,21 +111,17 @@ export default function Dashboard() {
              {prediction && <PredictionCard prediction={prediction} />}
           </div>
         </div>
-
         {/* Center / Right Column: Deep data & Overrides */}
         <div className="lg:col-span-8 flex flex-col gap-8">
-          
           {/* Top Section: Charts */}
           <div className="flex flex-col h-[380px] min-h-[300px]">
             <TrendChart scores={displayHistory} />
           </div>
-
           {/* Bottom Section: Feed and Controls split */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-[380px]">
             <AlertFeed alerts={displayAlerts} />
             <CorrectionPanel />
           </div>
-
         </div>
       </div>
     </div>

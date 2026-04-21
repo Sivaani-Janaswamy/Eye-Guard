@@ -38,7 +38,6 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
       const now = Date.now();
 
       // Log every 3 seconds — not every frame (too noisy)
-      // Use window properties for a simpler "globals" in main-world script injection
       const self = window as any;
       if (!self._lastFaceLog || now - self._lastFaceLog > 3000) {
         self._lastFaceLog = now;
@@ -50,6 +49,11 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
         );
       }
 
+      // --- BLINK & DISTANCE STATE ---
+      self._egBlinkHistory = self._egBlinkHistory || [];
+      self._egLastBlink = self._egLastBlink || 0;
+      self._egFrameCount = (self._egFrameCount || 0) + 1;
+
       if (faceCount === 0) {
         window.postMessage({
           type: 'EYEGUARD_FRAME',
@@ -60,33 +64,69 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
             ambientLuxLevel: 0,
             isLowLight: false,
             confidence: 0,
-            timestamp: now
+            timestamp: now,
+            landmarks: []
           }
         }, '*');
         return;
       }
 
       const landmarks = results.multiFaceLandmarks![0];
-      // Compute Distance (simplified robust version)
-      const p1 = landmarks[33];
-      const p2 = landmarks[263];
-      const dx = Math.abs(p2.x - p1.x); // normalized
-      let distanceCm = 50;
-      if (dx > 0) {
-        // IPD based estimation: 6.3cm average, assumes standard 720p FOV
-        distanceCm = 63 / dx; 
+      const videoWidth = videoElement?.videoWidth || 640;
+      const videoHeight = videoElement?.videoHeight || 480;
+
+      // --- DISTANCE CALCULATION (calibrated) ---
+      const IPD_CM = 6.3;
+      const FOCAL_PX = 550;
+      const leftEye = landmarks[33];
+      const rightEye = landmarks[263];
+      const pixelDist = Math.sqrt(
+        Math.pow((rightEye.x - leftEye.x) * videoWidth, 2) +
+        Math.pow((rightEye.y - leftEye.y) * videoHeight, 2)
+      );
+      const distanceCm = (IPD_CM * FOCAL_PX) / pixelDist;
+      console.log('[EyeGuard] distance calc:', Math.round(distanceCm), 'cm, pixelDist:', Math.round(pixelDist));
+
+      // --- BLINK DETECTION (EAR) ---
+      function computeEAR(a: number, b: number, c: number, d: number, e: number, f: number) {
+        // Euclidean distances between vertical pairs
+        const dist = (i: number, j: number) => {
+          const dx = landmarks[i].x - landmarks[j].x;
+          const dy = landmarks[i].y - landmarks[j].y;
+          return Math.sqrt(dx*dx + dy*dy);
+        };
+        return (dist(b, d) + dist(c, e)) / (2.0 * dist(a, f));
       }
+      // Left eye: 33, 160, 158, 133, 153, 144
+      // Right eye: 263, 387, 385, 362, 380, 373
+      const leftEAR = computeEAR(33, 160, 158, 133, 153, 144);
+      const rightEAR = computeEAR(263, 387, 385, 362, 380, 373);
+      if (self._egFrameCount % 60 === 0) {
+        console.log('[EyeGuard:main-world] EAR:', leftEAR.toFixed(3), rightEAR.toFixed(3));
+      }
+      const EAR_THRESHOLD = 0.21;
+      const isBlink = leftEAR < EAR_THRESHOLD && rightEAR < EAR_THRESHOLD;
+      // Rolling window for blinks/min (60s)
+      const nowSec = now / 1000;
+      // Remove blinks older than 60s
+      self._egBlinkHistory = self._egBlinkHistory.filter((t: number) => nowSec - t < 60);
+      if (isBlink && (!self._egLastBlink || nowSec - self._egLastBlink > 0.2)) {
+        self._egBlinkHistory.push(nowSec);
+        self._egLastBlink = nowSec;
+      }
+      const blinkRate = self._egBlinkHistory.length;
 
       const frame = {
         type: 'EYEGUARD_FRAME',
         payload: {
           faceDetected: true,
           screenDistanceCm: distanceCm,
-          blinkRate: 0, 
-          ambientLuxLevel: 100, 
+          blinkRate: blinkRate,
+          ambientLuxLevel: 100,
           isLowLight: false,
           confidence: 0.9,
-          timestamp: now
+          timestamp: now,
+          landmarks: landmarks ? landmarks.map(pt => [pt.x, pt.y, pt.z ?? 0]) : []
         }
       };
 

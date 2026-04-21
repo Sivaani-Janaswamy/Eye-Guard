@@ -12,6 +12,7 @@ export interface SensorFrame {
   ambientLuxLevel: number;
   isLowLight: boolean;        // lux < 50
   confidence: number;         // 0.0–1.0, MediaPipe landmark confidence
+  landmarks?: number[][];
 }
 
 export interface SessionRecord {
@@ -98,7 +99,8 @@ export class EyeGuardDB extends Dexie {
     blinkRate: number; 
     lux: number; 
     faceDetected: boolean; 
-    updatedAt: number 
+    updatedAt: number;
+    landmarks?: number[][];
   }>;
 
   constructor() {

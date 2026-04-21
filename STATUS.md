@@ -1,3 +1,10 @@
+## 2026-04-20
+
+**Bug:** Popup failed to save consent ("Could not save consent") due to Dexie DB not being open before consent operations in the service worker.
+
+**Root cause:** db.open() was not called before consent reads/writes in the service worker, causing race conditions and failures when the SW was cold or reloaded.
+
+**Fix:** Explicit db.open() is now called before all consent DB reads and writes (GRANT_CONSENT, CHECK_CONSENT, checkConsentAndAct), and immediately after the DB singleton is created. All consent flows now robustly open the DB before proceeding.
 # STATUS.md
 
 ## Module Completion

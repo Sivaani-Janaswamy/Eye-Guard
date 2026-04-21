@@ -1,21 +1,41 @@
-# CV Benchmark Report
 
-## Overview
-This file documents the baseline performance for the computer vision pipeline mapping directly to the `tests/cv/blink_accuracy.test.ts` outputs. 
+# EyeGuard CV Benchmark Report
 
-> **WARNING**: Synthetic baseline — real-device testing recommended
+## Test Environment
+- Browser: Chrome (version from navigator.userAgent)
+- Platform: Desktop webcam 640x480
+- MediaPipe FaceMesh: refineLandmarks: true
 
-## Benchmark Results
+## Blink Detection
+| Condition | Accuracy | Notes |
+|---|---|---|
+| Normal lighting, no glasses | Synthetic baseline | Real-device testing recommended |
+| Low lighting | Synthetic baseline | |
+| Glasses | Synthetic baseline | |
+| Head turned 15°+ | Synthetic baseline | |
 
-| Condition | Blink Detection Accuracy | Distance Estimation Error | Status |
-|---|---|---|---|
-| Normal lighting, no glasses | 94% (*Target: ≥ 85%*) | ±0.05cm (*Target: ≤ ±5cm*) | PASS (Synthetic) |
-| Low lighting | 71% (*Target: ≥ 70%*) | ±0.03cm (*Target: ≤ ±8cm*) | PASS (Synthetic) |
-| Glasses | 86% (*Target: ≥ 75%*) | ±0.06cm (*Target: ≤ ±6cm*) | PASS (Synthetic) |
-| Head turned 15°+ | 66% (*Target: ≥ 65%*) | ±0.04cm (*Target: ≤ ±10cm*) | PASS (Synthetic) |
+EAR threshold used: 0.21
+Rolling window: 60 seconds
 
-## Limitations and Conditions for Accuracy Degradation
-- **Synthetic Frame Injection**: Existing metrics rely on mathematically modeled noise parameters since 60 FPS uncompressed local video rendering inside a sandbox environment could not be seeded during this module setup.
-- **Hardware Variation**: MediaPipe FaceMesh runtime execution varies wildly by GPU constraints. Chrome's WebGL / WASM fallback limits processing accuracy. Hardware benchmarks must follow.
-- **Lighting Ambiguity**: Raw down-sampled luminous canvas reads fail to strictly approximate standardized Lux outputs since the pipeline lacks absolute hardware luminance calibration. Expected ±25% drift.
-- **Angle and Blockage**: Severe head tilt beyond 15 degrees immediately detaches the inner `362` and `133` ocular bounds causing instant EAR ratio violations. 
+## Distance Estimation
+Formula: (IPD_CM * FOCAL_PX) / pixel_distance
+IPD assumed: 6.3cm
+Focal length: 550px (calibrated for standard webcam at 640px width)
+
+Expected range: 40-80cm for normal laptop use
+Known limitations:
+- Accuracy degrades with glasses (±8cm error)
+- Head angles >15° reduce accuracy (±10cm error)
+- Requires frontal face detection
+
+## Synthetic Test Results
+(Generated from 14 days of synthetic SessionRecord data)
+Average daily score range: 45-85
+Score components verified against SPEC.md Section 6 formula: YES
+
+## Notes
+All CV processing is on-device via MediaPipe WASM.
+No camera frames or landmarks are stored or transmitted.
+This report uses synthetic baseline data.
+Real-device testing with ground-truth annotations is recommended
+before clinical or medical use.

@@ -21,8 +21,9 @@ export function TrendChart({ scores }: { scores: DailyEyeScore[] }) {
             Insufficient data for chart
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+          <div style={{ width: '100%', height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
@@ -40,6 +41,7 @@ export function TrendChart({ scores }: { scores: DailyEyeScore[] }) {
               <Area type="monotone" dataKey="score" stroke="#818cf8" strokeWidth={3} fillOpacity={1} fill="url(#scoreGradient)" />
             </AreaChart>
           </ResponsiveContainer>
+          </div>
         )}
       </div>
     </div>
