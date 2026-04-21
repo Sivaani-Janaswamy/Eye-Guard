@@ -15,45 +15,51 @@ let websiteStyleElement: HTMLStyleElement | null = null;
 let hudPos = { top: 20, left: 20 };
 let keepaliveInterval: any = null;
 
+const STYLES_BUNDLE_ID = 'eyeguard-styles-bundle';
+
+function ensureStylesInjected() {
+  if (document.getElementById(STYLES_BUNDLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = STYLES_BUNDLE_ID;
+  style.innerHTML = `
+    :root {
+      --eg-bg-primary: #ffffff;
+      --eg-bg-secondary: #f5f4f0;
+      --eg-border: rgba(0,0,0,0.15);
+      --eg-text-p: #1a1a18;
+      --eg-text-s: #6b6a63;
+      --eg-blue: #378ADD;
+      --eg-blue-bg: #E6F1FB;
+      --eg-green: #1D9E75;
+      --eg-green-bg: #EAF3DE;
+      --eg-red: #E24B4A;
+      --eg-red-bg: #FCEBEB;
+      --eg-amber: #EF9F27;
+      --eg-amber-bg: #FAEEDA;
+    }
+    .eg-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-family: -apple-system, sans-serif;
+      white-space: nowrap;
+      transition: background 0.3s, color 0.3s;
+      margin-top: 4px;
+      display: inline-block;
+      align-self: flex-start;
+      font-weight: 500;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// Ensure styles are injected at the start
+ensureStylesInjected();
+
 /**
  * Injects a floating alert notification into the corner of the active webpage.
  */
 export function injectAlert(alert: AlertEvent): void {
-  // Inject demo styles directly into page if not already there
-  const STYLES_ID = 'eyeguard-alert-styles';
-  if (!document.getElementById(STYLES_ID)) {
-    const style = document.createElement('style');
-    style.id = STYLES_ID;
-    style.innerHTML = `
-      :root {
-        --eg-bg: #ffffff;
-        --eg-text-p: #1a1a18;
-        --eg-text-s: #6b6a63;
-        --eg-border: rgba(0,0,0,0.15);
-        --eg-amber: #EF9F27;
-        --eg-red: #E24B4A;
-        --eg-blue: #378ADD;
-        --eg-secondary: #f5f4f0;
-      }
-      .eg-alert-toast {
-        position: fixed; bottom: 20px; right: 20px; z-index: 2147483647;
-        background: var(--eg-bg); border: 0.5px solid var(--eg-border); border-radius: 12px;
-        padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: -apple-system, sans-serif;
-        max-width: 320px; animation: egFadeIn 0.2s ease;
-      }
-      @keyframes egFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-      .eg-alert-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
-      .eg-dot-amber { background: var(--eg-amber); } .eg-dot-red { background: var(--eg-red); } .eg-dot-blue { background: var(--eg-blue); }
-      .eg-alert-body { flex: 1; }
-      .eg-alert-title { font-size: 13px; font-weight: 500; color: var(--eg-text-p); margin-bottom: 2px; }
-      .eg-alert-sub { font-size: 12px; color: var(--eg-text-s); }
-      .eg-alert-actions { display: flex; gap: 6px; flex-shrink: 0; }
-      .eg-alert-btn { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 0.5px solid var(--eg-border); background: var(--eg-secondary); cursor: pointer; color: var(--eg-text-s); }
-    `;
-    document.head.appendChild(style);
-  }
-
   const alertBox = document.createElement("div");
   alertBox.className = "eg-alert-toast";
 
@@ -110,12 +116,12 @@ export function injectToast(message: string): void {
   toast.style.setProperty("left", "20px", "important");
   toast.style.setProperty("z-index", "2147483647", "important");
   toast.style.setProperty("background-color", "rgba(0, 0, 0, 0.85)", "important");
-  toast.style.setProperty("color", "#ffffff", "important");
+  toast.style.setProperty("color", "var(--eg-bg-primary)", "important");
   toast.style.setProperty("padding", "12px 20px", "important");
   toast.style.setProperty("border-radius", "25px", "important");
   toast.style.setProperty("font-size", "14px", "important");
   toast.style.setProperty("font-weight", "600", "important");
-  toast.style.setProperty("font-family", "'Outfit', 'Inter', -apple-system, sans-serif", "important");
+  toast.style.setProperty("font-family", "-apple-system, sans-serif", "important");
   toast.style.setProperty("pointer-events", "none", "important");
   toast.style.setProperty("box-shadow", "0 4px 15px rgba(0,0,0,0.3)", "important");
   toast.style.setProperty("transition", "opacity 0.4s ease, transform 0.4s ease", "important");
@@ -145,6 +151,8 @@ export function injectToast(message: string): void {
 function injectStatusHUD(): void {
   if (hudElement) return;
 
+  ensureStylesInjected();
+
   hudElement = document.createElement("div");
   hudElement.id = "eyeguard-hud";
 
@@ -153,24 +161,22 @@ function injectStatusHUD(): void {
     top: `${hudPos.top}px`,
     left: `${hudPos.left}px`,
     width: "320px",
-    backgroundColor: currentTheme === 'dark' ? "rgba(26, 26, 26, 0.98)" : "#FFFFFF",
+    backgroundColor: currentTheme === 'dark' ? "rgba(26, 26, 26, 0.98)" : "var(--eg-bg-primary)",
     borderRadius: "8px",
     boxShadow: currentTheme === 'dark' ? "0 8px 32px rgba(0,0,0,0.5)" : "0 8px 30px rgba(0,0,0,0.12)",
     zIndex: "2147483647",
     display: "flex",
     overflow: "hidden",
-    fontFamily: "'Inter', -apple-system, sans-serif",
+    fontFamily: "-apple-system, sans-serif",
     transition: "transform 0.3s ease, opacity 0.3s ease, background-color 0.3s ease, border-color 0.3s ease",
-    border: currentTheme === 'dark' ? "1px solid #333333" : "1px solid #E0E0E0",
+    border: currentTheme === 'dark' ? "1px solid #333333" : "1px solid var(--eg-border)",
     cursor: "default"
   });
-
-  makeDraggable(hudElement);
 
   hudAccentBar = document.createElement("div");
   Object.assign(hudAccentBar.style, {
     width: "6px",
-    backgroundColor: "#0056b3",
+    backgroundColor: "var(--eg-blue)",
     transition: "background-color 0.4s ease"
   });
 
@@ -183,57 +189,11 @@ function injectStatusHUD(): void {
     gap: "4px"
   });
 
-  const header = document.createElement("div");
-  header.textContent = "EYEGUARD MONITOR";
-  Object.assign(header.style, {
-    fontSize: "10px",
-    fontWeight: "800",
-    color: "#666",
-    letterSpacing: "1px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center"
-  });
-
-  const minBtn = document.createElement("div");
-  minBtn.textContent = "—";
-  Object.assign(minBtn.style, {
-    cursor: "pointer",
-    padding: "0 4px",
-    fontSize: "14px",
-    transition: "color 0.2s"
-  });
-  minBtn.onclick = toggleHUD;
-  header.appendChild(minBtn);
-
-  const message = document.createElement("div");
-  message.id = "eyeguard-hud-msg";
-  message.textContent = "System active. Initializing...";
-  Object.assign(message.style, {
-    fontSize: "13px",
-    fontWeight: "600",
-    color: currentTheme === 'dark' ? "#F0F0F0" : "#333",
-    lineHeight: "1.4"
-  });
-
-  hudContent.appendChild(header);
-  hudContent.appendChild(message);
-
   const badge = document.createElement('div');
   badge.id = 'eyeguard-status-badge';
-  badge.style.cssText = `
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 10px;
-    background: #E6F1FB;
-    color: #0C447C;
-    font-family: sans-serif;
-    white-space: nowrap;
-    transition: background 0.3s, color 0.3s;
-    margin-top: 4px;
-    display: inline-block;
-    align-self: flex-start;
-  `;
+  badge.className = 'eg-badge';
+  badge.style.background = 'var(--eg-blue-bg)';
+  badge.style.color = 'var(--eg-blue)';
   badge.textContent = 'Initializing...';
   hudContent.appendChild(badge);
 
@@ -266,7 +226,7 @@ function injectStatusIcon(): void {
     left: `${hudPos.left}px`,
     width: "48px",
     height: "48px",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "var(--eg-bg-primary)",
     borderRadius: "50%",
     boxShadow: "0 4px 15px rgba(0,0,0,0.15)",
     zIndex: "2147483647",
@@ -275,7 +235,7 @@ function injectStatusIcon(): void {
     justifyContent: "center",
     fontSize: "24px",
     cursor: "pointer",
-    border: "2px solid #0056b3",
+    border: "2px solid var(--eg-blue)",
     transition: "transform 0.2s ease, background-color 0.3s ease, border-color 0.3s ease"
   });
 
@@ -375,16 +335,16 @@ function updateStatusHUD(level: 'info' | 'success' | 'warning' | 'error' | 'noti
   const msgEl = document.getElementById("eyeguard-hud-msg");
   if (msgEl) {
     msgEl.textContent = msg;
-    msgEl.style.color = currentTheme === 'dark' ? "#F0F0F0" : "#333";
+    msgEl.style.color = currentTheme === 'dark' ? "#F0F0F0" : "var(--eg-text-p)";
   }
 
-  let color = "#0056b3";
+  let color = "var(--eg-blue)";
   switch (level) {
-    case 'success': color = "#28a745"; break;
-    case 'warning': color = "#fd7e14"; break;
-    case 'error':   color = "#dc3545"; break;
-    case 'notice':  color = "#0056b3"; break;
-    case 'info':    color = "#0056b3"; break;
+    case 'success': color = "var(--eg-green)"; break;
+    case 'warning': color = "var(--eg-amber)"; break;
+    case 'error':   color = "var(--eg-red)"; break;
+    case 'notice':  color = "var(--eg-blue)"; break;
+    case 'info':    color = "var(--eg-blue)"; break;
   }
 
   hudAccentBar.style.backgroundColor = color;
@@ -393,11 +353,11 @@ function updateStatusHUD(level: 'info' | 'success' | 'warning' | 'error' | 'noti
   if (level === 'error' || level === 'warning') {
     hudElement.style.borderColor = color;
   } else {
-    hudElement.style.borderColor = currentTheme === 'dark' ? "#333333" : "#E0E0E0";
+    hudElement.style.borderColor = currentTheme === 'dark' ? "#333333" : "var(--eg-border)";
   }
 
-  hudElement.style.backgroundColor = currentTheme === 'dark' ? "rgba(26, 26, 26, 0.98)" : "#FFFFFF";
-  hudIconElement.style.backgroundColor = currentTheme === 'dark' ? "#1E1E1E" : "#FFFFFF";
+  hudElement.style.backgroundColor = currentTheme === 'dark' ? "rgba(26, 26, 26, 0.98)" : "var(--eg-bg-primary)";
+  hudIconElement.style.backgroundColor = currentTheme === 'dark' ? "#1E1E1E" : "var(--eg-bg-primary)";
 
   updateWebsiteTheme();
 }
@@ -408,16 +368,16 @@ function updateHudStatus(frame: any) {
 
   if (!frame.faceDetected) {
     badge.textContent = 'No face detected';
-    badge.style.background = '#FAEEDA';
-    badge.style.color = '#633806';
+    badge.style.background = 'var(--eg-amber-bg)';
+    badge.style.color = 'var(--eg-amber)';
     return;
   }
 
   const dist = Math.round(frame.screenDistanceCm);
   const blink = Math.round(frame.blinkRate);
   badge.textContent = `${dist}cm · ${blink}/min`;
-  badge.style.background = dist < 50 ? '#FCEBEB' : '#EAF3DE';
-  badge.style.color = dist < 50 ? '#791F1F' : '#27500A';
+  badge.style.background = dist < 50 ? 'var(--eg-red-bg)' : 'var(--eg-green-bg)';
+  badge.style.color = dist < 50 ? 'var(--eg-red)' : 'var(--eg-green)';
 }
 
 function startKeepalive() {
@@ -494,10 +454,12 @@ async function initializeCameraLoop() {
     videoElement = document.createElement("video");
     videoElement.id = "eyeguard-video";           // KEY FIX — named so main-world finds it
     videoElement.style.position = "fixed";
-    videoElement.style.top = "-9999px";           // Off-screen but still rendered
-    videoElement.style.left = "-9999px";
-    videoElement.style.width = "1px";
-    videoElement.style.height = "1px";
+    videoElement.style.top = "0";
+    videoElement.style.left = "0";
+    videoElement.style.width = "100vw";
+    videoElement.style.height = "100vh";
+    videoElement.style.zIndex = "1"; // Ensure video is behind other elements
+    videoElement.style.pointerEvents = "none"; // Prevent interaction
     videoElement.autoplay = true;
     videoElement.playsInline = true;
     videoElement.muted = true;
@@ -505,6 +467,18 @@ async function initializeCameraLoop() {
 
     // Must be in DOM for MediaPipe to read frames from it
     (document.body || document.documentElement).appendChild(videoElement);
+
+    // Ensure canvas is properly layered and sized
+    const canvas = document.createElement("canvas");
+    canvas.id = "eyeguard-canvas";
+    canvas.style.position = "fixed";
+    canvas.style.top = "0";
+    canvas.style.left = "0";
+    canvas.style.width = "100vw";
+    canvas.style.height = "100vh";
+    canvas.style.zIndex = "2"; // Ensure canvas is above video
+    canvas.style.pointerEvents = "none"; // Prevent interaction
+    (document.body || document.documentElement).appendChild(canvas);
 
     await new Promise<void>((resolve) => {
       if (!videoElement) return resolve();

@@ -243,34 +243,33 @@ function CameraTest() {
     }
   ];
 
-  const faceLeftPct = hasLiveData 
-    ? Math.min(85, Math.max(5, ((displayStats.distanceCm - 15) / 100) * 100)) 
-    : 10;
-  
-  const lineWidthPct = hasLiveData 
-    ? Math.max(0, 90 - faceLeftPct - 5) 
-    : 80;
+  const minDist = 20;
+  const maxDist = 80;
+  const distanceCm = displayStats?.distanceCm || 50;
+
+  const normalized = Math.min(1, Math.max(0, (distanceCm - minDist) / (maxDist - minDist)));
+  const faceLeftPct = 10 + normalized * 70; // Map to 10% - 80% range
+  const lineWidthPct = Math.max(0, 88 - faceLeftPct);
 
   return (
-    <div className="glassmorphism p-6 rounded-2xl flex flex-col gap-6">
+    <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-lg)' }} className="p-6 flex flex-col gap-6">
       <div className="flex justify-between items-center">
-        <h3 className="text-white/50 text-xs font-semibold uppercase tracking-wider">
+        <h3 style={{ color: 'var(--text-secondary)' }} className="text-xs font-semibold uppercase tracking-wider">
           Camera Diagnostics
         </h3>
         <div className="flex gap-2">
           {camStatus === 'off' ? (
-            <button onClick={startCamera} className="text-xs px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 rounded-lg transition font-bold shadow-lg shadow-indigo-500/20">
+            <button onClick={startCamera} style={{ background: 'var(--text-primary)', color: 'var(--bg-primary)' }} className="text-xs px-3 py-1.5 rounded-lg transition font-bold shadow-sm">
               Start Camera
             </button>
           ) : (
-            <button onClick={stopCamera} className="text-xs px-3 py-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg transition font-bold border border-red-500/30">
+            <button onClick={stopCamera} style={{ background: 'var(--red-bg)', color: 'var(--red-text)', border: '0.5px solid var(--border)' }} className="text-xs px-3 py-1.5 rounded-lg transition font-bold">
               Stop Camera
             </button>
           )}
         </div>
       </div>
 
-      {/* Simulation Canvas - Purely Visual */}
       <div style={{ width: '100%', height: '80px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', position: 'relative', overflow: 'hidden' }}>
         <div style={{ 
           width: '40px', height: '40px', borderRadius: '50%', border: '2px solid var(--blue-text)', 
@@ -285,7 +284,7 @@ function CameraTest() {
           </svg>
         </div>
         <div style={{ 
-          height: '2px', background: displayStats?.distanceCm && displayStats.distanceCm < 50 ? 'var(--red-text)' : 'var(--green-text)', 
+          height: '2px', background: distanceCm < 50 ? 'var(--red-text)' : 'var(--green-text)', 
           position: 'absolute', top: '50%', transform: 'translateY(-50%)', right: '12%',
           width: `${lineWidthPct}%`, transition: 'width 0.5s ease-out, background 0.3s ease'
         }}></div>
@@ -295,35 +294,13 @@ function CameraTest() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {metrics.map((m, i) => (
           <div key={i} style={{ background: 'var(--bg-secondary)', border: '0.5px solid var(--border)' }} className="p-3 rounded-xl flex flex-col gap-1">
-            <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider">{m.label}</span>
-            <span className={`text-lg font-bold ${m.warn ? 'text-amber-400' : 'text-white'}`}>
+            <span style={{ color: 'var(--text-tertiary)' }} className="text-[10px] uppercase font-bold tracking-wider">{m.label}</span>
+            <span style={{ color: m.warn ? 'var(--amber-text)' : 'var(--text-primary)' }} className="text-lg font-bold">
               {m.value}
             </span>
           </div>
         ))}
       </div>
-
-      {camStatus === 'on' && (
-        <div className="relative aspect-video bg-black/40 rounded-xl overflow-hidden border border-white/10 shadow-inner">
-          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover grayscale opacity-40 mix-blend-screen" />
-          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-          
-          <div className="absolute top-4 right-4 flex gap-2">
-            <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${hasLiveData && displayStats.faceDetected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-              <span className="text-[10px] font-bold text-white tracking-widest uppercase">
-                {hasLiveData && displayStats.faceDetected ? 'Face Locked' : 'Searching...'}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {camStatus === 'error' && (
-        <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-center">
-          <p className="text-red-400 text-sm font-medium">{camError}</p>
-        </div>
-      )}
     </div>
   );
 }

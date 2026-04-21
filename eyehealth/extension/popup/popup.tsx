@@ -119,16 +119,12 @@ function Popup() {
     <div className="ext-popup">
       <div className="ext-header">
         <div className="ext-header-row">
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <h2 className="ext-title" style={{ margin: 0 }}>EyeGuard</h2>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: "4px" }}>
-              <span style={{ cursor: "pointer", fontSize: "14px", opacity: 0.7 }} onClick={toggleTheme}>
-                {theme === "dark" ? "☀️" : "🌙"}
-              </span>
-              <span style={{ cursor: "pointer", fontSize: "14px", opacity: 0.7 }} onClick={() => setShowSettings(!showSettings)}>⚙️</span>
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div className="ext-title">EyeGuard</div>
+          <div className="header-controls">
+            <span className="theme-toggle" onClick={toggleTheme}>
+              {theme === "dark" ? "☀️" : "🌙"}
+            </span>
+            <span className="settings-toggle" onClick={() => setShowSettings(!showSettings)}>⚙️</span>
             <span className={`mon-status ${isMonitoring ? "mon-on" : "mon-off"}`}>
               {isMonitoring ? "Monitoring on" : "Monitoring off"}
             </span>
@@ -139,10 +135,12 @@ function Popup() {
         </div>
 
         {!showSettings && (
-          <div style={{ textAlign: "center", padding: "8px 0 12px" }}>
-            <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "4px" }}>Today's eye score</div>
+          <div className="score-section">
+            <div className="score-label">Today's eye score</div>
             <div className={`big-score ${riskClass}`}>{score}</div>
-            <div style={{ marginTop: "8px" }}><span className={`badge ${badgeClass}`}>{riskLabel}</span></div>
+            <div className="badge-container">
+              <span className={`badge ${badgeClass}`}>{riskLabel}</span>
+            </div>
           </div>
         )}
       </div>
@@ -157,14 +155,14 @@ function Popup() {
             <ProgressItem label="Distance" value={scoreData?.breakdown.distanceScore || 0} color="var(--green-text)" />
             <ProgressItem label="Blink rate" value={scoreData?.breakdown.blinkScore || 0} color="var(--red-text)" />
             <ProgressItem label="Lighting" value={scoreData?.breakdown.lightingScore || 0} color="var(--green-text)" />
-            
-            <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: "12px", margin: "16px 0", display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
-              <span style={{ color: "var(--text-secondary)" }}>⏱️ {activeSession ? Math.round((Date.now() - activeSession.startTime) / 60000) : 0}m session</span>
-              <span style={{ color: "var(--text-secondary)" }}>👀 {liveStats.blinkRate} bpm</span>
-              <span style={{ color: "var(--text-secondary)" }}>📏 {liveStats.distanceCm}cm</span>
+
+            <div className="live-stats">
+              <span>⏱️ {activeSession ? Math.round((Date.now() - activeSession.startTime) / 60000) : 0}m</span>
+              <span>👀 {liveStats.blinkRate} bpm</span>
+              <span>📏 {liveStats.distanceCm}cm</span>
             </div>
 
-            <div style={{ borderTop: "0.5px solid var(--border)", margin: "12px 0" }}></div>
+            <div className="divider"></div>
             <div className="section-title">Digital correction</div>
             <div className="preset-row">
               {(["off", "office", "night"] as const).map(p => (

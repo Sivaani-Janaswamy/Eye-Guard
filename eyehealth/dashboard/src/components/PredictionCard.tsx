@@ -27,8 +27,8 @@ export function PredictionCard({ prediction }: { prediction: PredictionResult })
   const confidencePct = Math.round(prediction.confidence * 100);
 
   return (
-    <div className="glassmorphism p-6 flex flex-col h-full gap-6">
-      <h3 className="text-white/50 text-xs font-semibold uppercase tracking-wider">
+    <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-lg)' }} className="p-6 flex flex-col h-full gap-6">
+      <h3 style={{ color: 'var(--text-secondary)' }} className="text-xs font-semibold uppercase tracking-wider">
         {prediction.horizon} Risk Forecast
       </h3>
 
@@ -51,17 +51,17 @@ export function PredictionCard({ prediction }: { prediction: PredictionResult })
       </div>
 
       <div className="flex-1">
-        <div className="text-[13px] font-semibold mb-3 text-white/90">Key factors driving this prediction</div>
+        <div style={{ color: 'var(--text-primary)' }} className="text-[13px] font-semibold mb-3">Key factors driving this prediction</div>
         <ul className="space-y-2 mb-6">
           {prediction.keyFactors.map((factor: string, idx: number) => (
-            <li key={idx} className="flex items-start gap-2 text-[12px] text-white/70 leading-snug">
+            <li key={idx} className="flex items-start gap-2 text-[12px] leading-snug" style={{ color: 'var(--text-secondary)' }}>
               <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: idx === 2 ? 'var(--green-text)' : 'var(--amber-text)' }}></span>
               <span>{factor}</span>
             </li>
           ))}
         </ul>
 
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}>
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '10px 12px', border: '0.5px solid var(--border)' }}>
           <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '3px' }}>Recommendation</div>
           <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             {prediction.recommendation}
@@ -70,7 +70,7 @@ export function PredictionCard({ prediction }: { prediction: PredictionResult })
       </div>
 
       <div className="flex flex-col gap-2">
-        <div className="text-[10px] text-white/30 uppercase font-bold tracking-widest">Prediction Horizon (Demo)</div>
+        <div style={{ color: 'var(--text-tertiary)' }} className="text-[10px] uppercase font-bold tracking-widest">Prediction Horizon (Demo-only)</div>
         <div className="flex gap-2">
           {(["7d", "14d", "30d"] as const).map(h => (
             <button
@@ -78,9 +78,13 @@ export function PredictionCard({ prediction }: { prediction: PredictionResult })
               onClick={() => setHorizon(h)}
               className={`text-[11px] px-3 py-1.5 rounded-full border transition font-medium ${
                 horizon === h 
-                ? 'bg-white text-black border-white' 
-                : 'text-white/40 border-white/10 hover:border-white/20'
+                ? 'bg-black text-white' 
+                : 'bg-transparent text-secondary'
               }`}
+              style={horizon === h 
+                ? { background: 'var(--text-primary)', color: 'var(--bg-primary)', borderColor: 'var(--text-primary)' }
+                : { color: 'var(--text-secondary)', borderColor: 'var(--border)' }
+              }
             >
               {h.replace('d', ' days')}
             </button>
@@ -88,7 +92,7 @@ export function PredictionCard({ prediction }: { prediction: PredictionResult })
         </div>
       </div>
 
-      <div className="pt-4 border-t border-white/10 text-[9px] text-white/30 font-mono text-center italic">
+      <div style={{ color: 'var(--text-tertiary)' }} className="pt-4 border-t border-white/10 text-[9px] font-mono text-center italic">
         {prediction.disclaimer}
       </div>
     </div>
