@@ -100,7 +100,8 @@ export class EyeGuardDB extends Dexie {
     lux: number; 
     faceDetected: boolean; 
     updatedAt: number;
-    landmarks?: number[][];
+    confidence?: number;
+    landmarks?: number[][] | null;
   }>;
 
   constructor() {

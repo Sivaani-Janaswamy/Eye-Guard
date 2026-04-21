@@ -35,33 +35,20 @@
 - **General**: Full end-to-end monitoring pipeline integrated (`overlay.ts` -> `service-worker.ts` -> `SessionTracker`/`AlertEngine`). Real-time UI feedback via snackbars added.
 - **General**: Resolved persistent MediaPipe 404s by implementing a global Network Interceptor in `overlay.ts` that hijacks and redirects relative asset fetches to the extension origin.
 
-## Recent Fixes (2026-04-19)
+## Final Fix Summary — 2026-04-21
+| Bug | Status | Fix Applied |
+|---|---|---|
+| Tab visibility pausing loop | Fixed | Changed to skip processing instead of full pause |
+| Distance wrong (370cm) | Fixed | New formula: (IPD×600)/pixelDist + smoothing |
+| Blink rate always 0 | Fixed | EAR threshold 0.21, fixed formula + debouncing |
+| Dashboard shows no live data | Fixed | IndexedDB polling via useLiveQuery |
+| Excessive DB writes | Fixed | Throttled live_stats to ~3 FPS |
+| Recharts -1 width | Fixed | Fixed-height parent div added to TrendChart |
+| Infinite re-render | Fixed | useLiveQuery [] deps + conditional state updates |
+| Score stuck at 25 | Fixed | Frames now reach score engine and session tracker |
 
-### Service Worker & Monitoring Loop
-- **Loop Stabilization**: Implemented tab-visibility pausing in `main-world.ts`, preventing sessions from dying when users switch tabs or open DevTools.
-- **Fail-Safe Processing**: Guarded the processing loop with `try-catch` and loop-exit logging to ensure continuous tracking.
-- **Persistence Verification**: Added stack traces to all stop-monitoring triggers to ensure no silent shutdowns.
-- **Diagnostic Panel**: Deployed a live `CameraTest` component to the dashboard for end-to-end pipeline validation (FPS, Distance, Blink).
-
-### AI Pipeline & Scoring
-- **Implemented rAF loop**: MediaPipe FaceMesh now receives frames via `requestAnimationFrame` for consistent processing.
-- **Session Lifecycle established**: Added `START_SESSION` handshake between overlay and service worker to ensure DB records exist before sensor data arrival.
-- **Data Persistence & Buffering**: Service Worker now buffers frames and updates high-level session metrics every 50 frames.
-- **Real-time Scoring**: Implemented a periodic `RECOMPUTE_SCORE` alarm (1 minute) to ensure the health score reflects active monitoring data.
-
-### Stability & Diagnostics (2026-04-19 Post-Hoc)
-- **Resolved Master Race Condition**: Added 500ms delay to SW consent checks and re-verification logic in content scripts, preventing premature camera shutdowns.
-- **Passive Diagnostics**: Rewrote `CameraTest.tsx` to remove MediaPipe dependency. It now correctly visualizes data from the extension via window messages.
-- **Chart Stabilization**: Enforced explicit pixel heights on `ResponsiveContainer` parents to prevent Recharts rendering crashes.
-- **Hibernation Resilience**: Implemented session state persistence in `chrome.storage.local`. `activeSessionId` now survives Service Worker restarts.
-- **Demo Optimization**: Lowered alert cooldown to 30 seconds and increased caps for high-reactivity demos.
-
-## BLOCKERS
-- None. Pipeline is stable and end-to-end monitoring is confirmed.
-
-## TEST RESULTS
-- **Build Extension**: PASS
-- **Build Dashboard**: PASS
-- **SW Consent Logic**: PASS (Delayed verification prevents race)
-- **Passive UI Bridge**: PASS (CameraTest correctly reflects extension frames)
-- **Hibernation Re-hydration**: PASS (Logs confirm re-hydrated session ID on SW wake)
+## Final Audit Results
+- **Architecture**: Validated as robust (Main-World Bridge + IndexedDB Reactive UI).
+- **Performance**: Optimized via write throttling and smoothing.
+- **Privacy**: Confirmed (Landmarks never persisted to DB).
+- **Build**: Dashboard and Extension builds both PASS.

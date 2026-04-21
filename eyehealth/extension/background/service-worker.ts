@@ -31,6 +31,7 @@ let frameBuffer: SensorFrame[] = [];
 let activeSessionId: string | null = null;
 let sessionStartTime: number | null = null;
 let isHydrated = false;
+let lastWriteTime = 0; // For time-based throttling
 
 // 🔴 NEW: prevents duplicate consent checks
 let isCheckingConsent = false;
@@ -277,15 +278,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const frame: SensorFrame = message.payload;
       frameBuffer.push(frame);
 
-      db.table('live_stats').put({
-        id: 1,
-        distanceCm: Math.round(frame.screenDistanceCm),
-        blinkRate: parseFloat(frame.blinkRate.toFixed(1)),
-        lux: Math.round(frame.ambientLuxLevel),
-        faceDetected: frame.faceDetected,
-        landmarks: frame.landmarks,
-        updatedAt: Date.now()
-      }).catch(() => {});
+      // Throttle writes to ~3 FPS (approx every 300ms)
+      const now = Date.now();
+      if (now - lastWriteTime > 300) {
+        lastWriteTime = now;
+        db.table('live_stats').put({
+          id: 1,
+          distanceCm: Math.round(frame.screenDistanceCm),
+          blinkRate: parseFloat(frame.blinkRate.toFixed(1)),
+          lux: Math.round(frame.ambientLuxLevel),
+          faceDetected: frame.faceDetected,
+          confidence: frame.confidence || 0,
+          landmarks: null, // Privacy rule: never persist landmarks
+          updatedAt: now
+        }).catch((err) => console.error('[EyeGuard:SW] live_stats write failed:', err));
+      }
 
       if (frameBuffer.length % 25 === 0 && activeSessionId) {
         const faced = frameBuffer.slice(-25).filter(f => f.faceDetected);
@@ -303,6 +310,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             endTime: Date.now()
           }).catch(() => {});
         }
+      }
+
+      // Recompute score every 60 frames (~1 minute at throttled rate, or ~2s at raw rate)
+      // Actually 60 frames of data is a good trigger for score updates
+      if (frameBuffer.length % 60 === 0) {
+        scoreEngine.getTodayScore().then(score => {
+          console.log('[EyeGuard:SW] Score recomputed:', score.score);
+        }).catch(() => {});
       }
 
       sendResponse({ ok: true });

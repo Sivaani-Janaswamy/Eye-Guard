@@ -92,18 +92,42 @@ function CameraTest() {
   const [camStatus, setCamStatus] = useState<'off' | 'starting' | 'on' | 'error'>('off');
   const [camError, setCamError] = useState('');
   const [fps, setFps] = useState(0);
-  const lastUpdateRef = useRef<number>(0);
+  
+  const fpsCountRef = useRef(0);
+  const lastFpsReset = useRef(Date.now());
+  const lastDisplayUpdateRef = useRef(0);
+
+  const [displayStats, setDisplayStats] = useState<LiveStats | null>(null);
 
   const liveStats = useLiveQuery(
     () => db.table('live_stats').get(1).catch(() => null),
     []
   ) as LiveStats | null;
 
+  // ---------------- DISPLAY THROTTLING ----------------
   useEffect(() => {
-    if (liveStats?.landmarks) {
-      lastLandmarksRef.current = liveStats.landmarks;
+    if (!liveStats) return;
+
+    const now = Date.now();
+    if (now - lastDisplayUpdateRef.current > 500) {
+      setDisplayStats(liveStats);
+      lastDisplayUpdateRef.current = now;
     }
-  }, [liveStats?.landmarks]);
+  }, [liveStats]);
+
+  // ---------------- FPS TRACKING ----------------
+  useEffect(() => {
+    if (!liveStats) return;
+
+    fpsCountRef.current++;
+    const now = Date.now();
+    if (now - lastFpsReset.current >= 1000) {
+      const currentFps = fpsCountRef.current;
+      setFps(currentFps);
+      fpsCountRef.current = 0;
+      lastFpsReset.current = now;
+    }
+  }, [liveStats?.updatedAt]);
 
   // ---------------- DRAW LOOP ----------------
   useEffect(() => {
@@ -139,22 +163,6 @@ function CameraTest() {
     };
   }, []);
 
-  // ---------------- FPS ----------------
-  useEffect(() => {
-    if (!liveStats) return;
-
-    const now = Date.now();
-    const dt = now - lastUpdateRef.current;
-
-    if (lastUpdateRef.current && dt < 2000) {
-      setFps(f => Math.min(10, f + 1));
-    } else {
-      setFps(1);
-    }
-
-    lastUpdateRef.current = now;
-  }, [liveStats?.updatedAt]);
-
   // ---------------- CAMERA ----------------
   const startCamera = useCallback(async () => {
     setCamStatus('starting');
@@ -189,37 +197,37 @@ function CameraTest() {
   }, []);
 
   // ---------------- STATE ----------------
-  const isStale = liveStats ? Date.now() - liveStats.updatedAt > 5000 : true;
-  const hasLiveData = !!liveStats && !isStale;
+  const isStale = displayStats ? Date.now() - displayStats.updatedAt > 5000 : true;
+  const hasLiveData = !!displayStats && !isStale;
 
   const statusColor = !hasLiveData
     ? { bg: '#F1EFE8', text: '#5F5E5A' }
-    : liveStats.faceDetected
+    : displayStats.faceDetected
     ? { bg: '#EAF3DE', text: '#27500A' }
     : { bg: '#FCEBEB', text: '#791F1F' };
 
   const metrics = [
     {
       label: 'Distance',
-      value: hasLiveData ? `${liveStats.distanceCm} cm` : '—',
-      warn: hasLiveData && liveStats.distanceCm < 50
+      value: hasLiveData ? `${displayStats.distanceCm} cm` : '—',
+      warn: hasLiveData && displayStats.distanceCm < 50
     },
     {
       label: 'Blink rate',
-      value: hasLiveData ? `${liveStats.blinkRate} /min` : '—',
-      warn: hasLiveData && liveStats.blinkRate < 15
+      value: hasLiveData ? `${displayStats.blinkRate} /min` : '—',
+      warn: hasLiveData && displayStats.blinkRate < 15
     },
     {
       label: 'Lighting',
-      value: hasLiveData ? `${liveStats.lux} lux` : '—',
-      warn: hasLiveData && liveStats.lux < 50
+      value: hasLiveData ? `${displayStats.lux} lux` : '—',
+      warn: hasLiveData && displayStats.lux < 50
     },
     {
       label: 'Confidence',
-      value: hasLiveData && liveStats.confidence != null
-        ? `${Math.round(liveStats.confidence * 100)}%`
+      value: hasLiveData && displayStats.confidence != null
+        ? `${Math.round(displayStats.confidence * 100)}%`
         : '—',
-      warn: hasLiveData && liveStats.confidence != null && liveStats.confidence < 0.6
+      warn: hasLiveData && displayStats.confidence != null && displayStats.confidence < 0.6
     },
     {
       label: 'FPS',
@@ -229,7 +237,7 @@ function CameraTest() {
     {
       label: 'Data age',
       value: hasLiveData
-        ? `${Math.round((Date.now() - liveStats.updatedAt) / 1000)}s`
+        ? `${Math.round((Date.now() - displayStats.updatedAt) / 1000)}s`
         : '—',
       warn: !hasLiveData
     }
@@ -240,8 +248,8 @@ function CameraTest() {
       {/* Face badge */}
       {camStatus === 'on' && hasLiveData && (
         <div>
-          {liveStats.faceDetected
-            ? `${liveStats.distanceCm}cm · ${liveStats.blinkRate}/min`
+          {displayStats.faceDetected
+            ? `${displayStats.distanceCm}cm · ${displayStats.blinkRate}/min`
             : 'no face'}
         </div>
       )}

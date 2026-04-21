@@ -36,15 +36,15 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (scores && scores.length > 0) {
-      setIsDemoData(false);
+      if (isDemoData) setIsDemoData(false);
     } else if (scores && scores.length === 0) {
-      setIsDemoData(true);
+      if (!isDemoData) setIsDemoData(true);
     }
-  }, [scores]);
+  }, [scores, isDemoData]);
 
-  // Log dashboard mount and tracking status only when trackingActive changes
+  // Log dashboard mount
   useEffect(() => {
-    console.log('[EyeGuard] Dashboard rendering...');
+    console.log('[EyeGuard] Dashboard mounted');
   }, []);
 
   function generateDemoHistory() {
