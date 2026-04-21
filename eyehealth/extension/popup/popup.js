@@ -27772,7 +27772,7 @@
               setActiveSession(sessions[0]);
             }
             const correctionProfileObj = await db.correction.get(1);
-            if (correctionProfileObj && correctionProfileObj.activePreset) {
+            if (correctionProfileObj?.activePreset) {
               setActivePreset(correctionProfileObj.activePreset);
             }
             const settings = await chrome.storage.local.get("theme");
@@ -27802,29 +27802,20 @@
         }, []);
         const handleGrantConsent = () => {
           chrome.runtime.sendMessage({ type: "GRANT_CONSENT" }, (response) => {
-            if (response?.success) {
-              setHasConsent(true);
-            } else {
-              console.error("Could not save consent");
-            }
+            if (response?.success) setHasConsent(true);
           });
         };
-        const getScoreColor = (score) => {
-          if (score >= 75) return "#28a745";
-          if (score >= 50) return "#ffc107";
-          return "#dc3545";
-        };
-        const handleToggleMonitoring = (newVal) => {
+        const toggleMon = () => {
+          const newVal = !isMonitoring;
           setIsMonitoring(newVal);
-          const msgType = newVal ? "START_MONITORING" : "STOP_MONITORING";
-          chrome.runtime.sendMessage({ type: msgType });
+          chrome.runtime.sendMessage({ type: newVal ? "START_MONITORING" : "STOP_MONITORING" });
         };
-        const handleCorrectionPreset = async (presetId) => {
+        const setPreset = async (presetId) => {
           setActivePreset(presetId);
           const profileObj = { ...CORRECTION_PRESETS[presetId] };
           await db.correction.put({ id: 1, ...profileObj });
           chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs.length > 0 && tabs[0].id) {
+            if (tabs[0]?.id) {
               chrome.tabs.sendMessage(tabs[0].id, { type: "APPLY_CORRECTION", profile: profileObj }).catch(() => {
               });
             }
@@ -27841,136 +27832,22 @@
             });
           });
         };
-        const isDark = theme === "dark";
-        const colors = {
-          bg: isDark ? "#121212" : "#f8f9fa",
-          card: isDark ? "#1e1e1e" : "#ffffff",
-          text: isDark ? "#e0e0e0" : "#333333",
-          subtext: isDark ? "#aaaaaa" : "#666666",
-          border: isDark ? "#333333" : "#eeeeee",
-          accent: "#6366f1"
-        };
-        if (hasConsent === null) {
-          return /* @__PURE__ */ import_react.default.createElement("div", { style: { padding: "32px", textAlign: "center", color: "#666" } }, "Initialising...");
-        }
-        if (!hasConsent) {
-          return /* @__PURE__ */ import_react.default.createElement(ConsentScreen, { onAllow: handleGrantConsent, isDark, colors });
-        }
-        return /* @__PURE__ */ import_react.default.createElement("div", { style: {
-          display: "flex",
-          flexDirection: "column",
-          minHeight: "500px",
-          maxHeight: "500px",
-          width: "400px",
-          padding: "16px",
-          gap: "16px",
-          backgroundColor: colors.bg,
-          color: colors.text,
-          transition: "background-color 0.3s ease, color 0.3s ease",
-          overflowY: "auto",
-          boxSizing: "border-box"
-        } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement("h2", { style: { margin: 0, fontSize: "18px" } }, "EyeGuard"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: "12px", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement(
-          "span",
-          {
-            style: { cursor: "pointer", fontSize: "18px", userSelect: "none" },
-            onClick: toggleTheme,
-            title: `Switch to ${isDark ? "Light" : "Dark"} Mode`
-          },
-          isDark ? "\u2600\uFE0F" : "\u{1F319}"
-        ), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", cursor: "pointer" } }, /* @__PURE__ */ import_react.default.createElement("input", { type: "checkbox", checked: isMonitoring, onChange: (e) => handleToggleMonitoring(e.target.checked) }), " Active"), /* @__PURE__ */ import_react.default.createElement("span", { style: { cursor: "pointer", fontSize: "16px" }, onClick: () => setShowSettings(!showSettings) }, "\u2699\uFE0F"))), !showSettings ? /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { style: {
-          textAlign: "center",
-          padding: "12px",
-          background: colors.card,
-          borderRadius: "8px",
-          boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)",
-          border: isDark ? `1px solid ${colors.border}` : "none"
-        } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "14px", color: colors.subtext } }, "Today's EyeScore"), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "64px", fontWeight: "bold", color: getScoreColor(scoreData?.score || 100), lineHeight: "1.1" } }, scoreData?.score || 100), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: "12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" } }, /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Screen Time", value: scoreData?.breakdown.screenTimeScore || 25, max: 25, isDark, colors }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Distance", value: scoreData?.breakdown.distanceScore || 25, max: 25, isDark, colors }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Blinks", value: scoreData?.breakdown.blinkScore || 25, max: 25, isDark, colors }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Lighting", value: scoreData?.breakdown.lightingScore || 25, max: 25, isDark, colors }))), /* @__PURE__ */ import_react.default.createElement("div", { style: {
-          background: colors.card,
-          padding: "12px",
-          borderRadius: "8px",
-          border: isDark ? `1px solid ${colors.border}` : "none",
-          boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)"
-        } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", marginBottom: "8px" } }, "Current Session ", liveStats.faceDetected ? "\u{1F7E2}" : "\u{1F534}"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px" } }, /* @__PURE__ */ import_react.default.createElement("div", null, "\u23F1\uFE0F ", activeSession ? Math.round((Date.now() - activeSession.startTime) / 6e4) : 0, "m"), /* @__PURE__ */ import_react.default.createElement("div", null, "\u{1F440} ", liveStats.blinkRate, " bpm"), /* @__PURE__ */ import_react.default.createElement("div", null, "\u{1F4CF} ", liveStats.distanceCm, " cm")), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "10px", color: colors.subtext, textAlign: "center", marginTop: "4px" } }, liveStats.faceDetected ? "Tracking" : "No face detected")), /* @__PURE__ */ import_react.default.createElement("div", { style: {
-          background: colors.card,
-          padding: "12px",
-          borderRadius: "8px",
-          border: isDark ? `1px solid ${colors.border}` : "none",
-          boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)"
-        } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", marginBottom: "8px" } }, "Display Correction"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: "8px" } }, ["off", "office", "night"].map((preset) => /* @__PURE__ */ import_react.default.createElement(
-          "button",
-          {
-            key: preset,
-            onClick: () => handleCorrectionPreset(preset),
-            style: {
-              flex: 1,
-              padding: "8px",
-              border: "none",
-              borderRadius: "4px",
-              background: activePreset === preset ? colors.accent : isDark ? "#2a2a2a" : "#f1f1f1",
-              color: activePreset === preset ? "white" : colors.text,
-              cursor: "pointer",
-              textTransform: "capitalize",
-              fontSize: "12px",
-              transition: "background-color 0.2s"
-            }
-          },
-          preset
-        )))), /* @__PURE__ */ import_react.default.createElement(
-          "button",
-          {
-            onClick: () => chrome.tabs.create({ url: "chrome-extension://" + chrome.runtime.id + "/dist/dashboard/index.html" }),
-            style: {
-              marginTop: "auto",
-              padding: "12px",
-              background: isDark ? "#333" : "#333",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "bold",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
-            }
-          },
-          "View Dashboard"
-        )) : /* @__PURE__ */ import_react.default.createElement(SettingsPanel, { isDark, colors }));
+        if (hasConsent === null) return null;
+        if (!hasConsent) return /* @__PURE__ */ import_react.default.createElement(ConsentScreen, { onAllow: handleGrantConsent });
+        const score = scoreData?.score || 100;
+        const riskClass = score >= 75 ? "score-green" : score >= 50 ? "score-amber" : "score-red";
+        const badgeClass = score >= 75 ? "badge-green" : score >= 50 ? "badge-amber" : "badge-red";
+        const riskLabel = score >= 75 ? "Low risk" : score >= 50 ? "Moderate risk" : "High risk";
+        return /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-popup" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-header" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-header-row" }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: "12px" } }, /* @__PURE__ */ import_react.default.createElement("h2", { className: "ext-title", style: { margin: 0 } }, "EyeGuard"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: "8px", alignItems: "center", marginLeft: "4px" } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { cursor: "pointer", fontSize: "14px", opacity: 0.7 }, onClick: toggleTheme }, theme === "dark" ? "\u2600\uFE0F" : "\u{1F319}"), /* @__PURE__ */ import_react.default.createElement("span", { style: { cursor: "pointer", fontSize: "14px", opacity: 0.7 }, onClick: () => setShowSettings(!showSettings) }, "\u2699\uFE0F"))), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px" } }, /* @__PURE__ */ import_react.default.createElement("span", { className: `mon-status ${isMonitoring ? "mon-on" : "mon-off"}` }, isMonitoring ? "Monitoring on" : "Monitoring off"), /* @__PURE__ */ import_react.default.createElement("div", { className: `toggle ${isMonitoring ? "on" : ""}`, onClick: toggleMon }, /* @__PURE__ */ import_react.default.createElement("div", { className: "toggle-thumb" })))), !showSettings && /* @__PURE__ */ import_react.default.createElement("div", { style: { textAlign: "center", padding: "8px 0 12px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "11px", color: "var(--text-secondary)", marginBottom: "4px" } }, "Today's eye score"), /* @__PURE__ */ import_react.default.createElement("div", { className: `big-score ${riskClass}` }, score), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: "8px" } }, /* @__PURE__ */ import_react.default.createElement("span", { className: `badge ${badgeClass}` }, riskLabel)))), /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-body" }, showSettings ? /* @__PURE__ */ import_react.default.createElement(SettingsPanel, { onBack: () => setShowSettings(false) }) : /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title" }, "Score breakdown"), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Screen time", value: scoreData?.breakdown.screenTimeScore || 0, color: "var(--amber-text)" }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Distance", value: scoreData?.breakdown.distanceScore || 0, color: "var(--green-text)" }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Blink rate", value: scoreData?.breakdown.blinkScore || 0, color: "var(--red-text)" }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Lighting", value: scoreData?.breakdown.lightingScore || 0, color: "var(--green-text)" }), /* @__PURE__ */ import_react.default.createElement("div", { style: { background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: "12px", margin: "16px 0", display: "flex", justifyContent: "space-between", fontSize: "11px" } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "var(--text-secondary)" } }, "\u23F1\uFE0F ", activeSession ? Math.round((Date.now() - activeSession.startTime) / 6e4) : 0, "m session"), /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "var(--text-secondary)" } }, "\u{1F440} ", liveStats.blinkRate, " bpm"), /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "var(--text-secondary)" } }, "\u{1F4CF} ", liveStats.distanceCm, "cm")), /* @__PURE__ */ import_react.default.createElement("div", { style: { borderTop: "0.5px solid var(--border)", margin: "12px 0" } }), /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title" }, "Digital correction"), /* @__PURE__ */ import_react.default.createElement("div", { className: "preset-row" }, ["off", "office", "night"].map((p) => /* @__PURE__ */ import_react.default.createElement("div", { key: p, className: `preset-btn ${activePreset === p ? "on" : ""}`, onClick: () => setPreset(p) }, p.charAt(0).toUpperCase() + p.slice(1)))), /* @__PURE__ */ import_react.default.createElement("button", { className: "view-btn", onClick: () => chrome.tabs.create({ url: "/dist/dashboard/index.html" }) }, "View full dashboard"))));
       }
-      function ProgressItem({ label, value, max, isDark, colors }) {
-        const pct = value / max * 100;
-        let color = "#28a745";
-        if (pct < 75) color = "#ffc107";
-        if (pct < 50) color = "#dc3545";
-        return /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "11px", textAlign: "left", color: colors.text } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between" } }, /* @__PURE__ */ import_react.default.createElement("span", null, label), /* @__PURE__ */ import_react.default.createElement("span", { style: { color: colors.subtext } }, Math.round(value), "/", max)), /* @__PURE__ */ import_react.default.createElement("div", { style: { height: "4px", background: isDark ? "#333" : "#e9ecef", borderRadius: "2px", marginTop: "2px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { height: "100%", background: color, width: `${pct}%`, borderRadius: "2px" } })));
+      function ProgressItem({ label, value, color }) {
+        return /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-row" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "bar-label" }, label), /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-track" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-fill", style: { width: `${value / 25 * 100}%`, background: color } })), /* @__PURE__ */ import_react.default.createElement("span", { className: "bar-pts" }, Math.round(value)));
       }
-      function SettingsPanel({ isDark, colors }) {
-        return /* @__PURE__ */ import_react.default.createElement("div", { style: {
-          background: colors.card,
-          padding: "14px",
-          borderRadius: "8px",
-          border: isDark ? `1px solid ${colors.border}` : "none",
-          boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)",
-          color: colors.text
-        } }, /* @__PURE__ */ import_react.default.createElement("h3", { style: { marginTop: 0, fontSize: "14px" } }, "Alert Thresholds"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "12px", fontSize: "12px" } }, /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: "4px" } }, "Minimum Distance (cm)", /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "30", max: "80", defaultValue: "50", style: { accentColor: colors.accent } })), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: "4px" } }, "Minimum Blink Rate (bpm)", /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "5", max: "30", defaultValue: "15", style: { accentColor: colors.accent } })), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: "4px" } }, "Minimum Brightness (lux)", /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "10", max: "200", defaultValue: "50", style: { accentColor: colors.accent } }))));
+      function SettingsPanel({ onBack }) {
+        return /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "12px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title", style: { margin: 0 } }, "Alert Thresholds"), /* @__PURE__ */ import_react.default.createElement("button", { className: "badge badge-blue", style: { border: "none", cursor: "pointer" }, onClick: onBack }, "Back")), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "14px", fontSize: "12px" } }, /* @__PURE__ */ import_react.default.createElement("div", { className: "slider-row", style: { margin: 0 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "4px" } }, /* @__PURE__ */ import_react.default.createElement("span", null, "Min Distance (cm)"), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 600 } }, "50cm")), /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "30", max: "80", defaultValue: "50", style: { width: "100%" } })), /* @__PURE__ */ import_react.default.createElement("div", { className: "slider-row", style: { margin: 0 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "4px" } }, /* @__PURE__ */ import_react.default.createElement("span", null, "Min Blink Rate (bpm)"), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 600 } }, "15bpm")), /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "5", max: "30", defaultValue: "15", style: { width: "100%" } })), /* @__PURE__ */ import_react.default.createElement("div", { className: "slider-row", style: { margin: 0 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "4px" } }, /* @__PURE__ */ import_react.default.createElement("span", null, "Min Lighting (lux)"), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 600 } }, "50 lux")), /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "10", max: "200", defaultValue: "50", style: { width: "100%" } }))));
       }
-      function ConsentScreen({ onAllow, isDark, colors }) {
-        return /* @__PURE__ */ import_react.default.createElement("div", { style: {
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
-          padding: "24px",
-          gap: "20px",
-          textAlign: "center",
-          justifyContent: "center",
-          background: colors.bg,
-          color: colors.text,
-          transition: "background-color 0.3s ease"
-        } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: "48px" } }, "\u{1F441}\uFE0F"), /* @__PURE__ */ import_react.default.createElement("h2", { style: { margin: 0, color: colors.text } }, "Welcome to EyeGuard"), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: "14px", color: colors.subtext, lineHeight: "1.5" } }, "To monitor your blink rate and screen distance, we need access to your camera.", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("strong", { style: { color: isDark ? "#fff" : "#444" } }, "Privacy First:"), " Processing happens entirely on-device. No images or biometric data ever leave your computer."), /* @__PURE__ */ import_react.default.createElement(
-          "button",
-          {
-            onClick: onAllow,
-            style: { marginTop: "10px", padding: "14px", background: colors.accent, color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }
-          },
-          "Allow Camera Access"
-        ), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: "11px", color: colors.subtext } }, "By clicking Allow, you agree to our privacy-first local monitoring policy."));
+      function ConsentScreen({ onAllow }) {
+        return /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-popup", style: { border: "none" } }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-body", style: { textAlign: "center", padding: "24px 20px" } }, /* @__PURE__ */ import_react.default.createElement("div", { className: "onboard-icon" }, /* @__PURE__ */ import_react.default.createElement("svg", { width: "24", height: "24", viewBox: "0 0 24 24", fill: "none" }, /* @__PURE__ */ import_react.default.createElement("circle", { cx: "12", cy: "8", r: "4", stroke: "#185FA5", "stroke-width": "1.5" }), /* @__PURE__ */ import_react.default.createElement("ellipse", { cx: "12", cy: "8", rx: "2", ry: "4", stroke: "#185FA5", "stroke-width": "1" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M4 20c0-4 3.6-7 8-7s8 3 8 7", stroke: "#185FA5", "stroke-width": "1.5", "stroke-linecap": "round" }))), /* @__PURE__ */ import_react.default.createElement("div", { className: "onboard-title" }, "EyeGuard needs camera access"), /* @__PURE__ */ import_react.default.createElement("div", { className: "onboard-sub" }, "Used only to measure your blink rate and screen distance. No video is ever recorded or sent anywhere \u2014 all processing happens on your device."), /* @__PURE__ */ import_react.default.createElement("div", { className: "privacy-card" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "privacy-title" }, "What stays on your device"), /* @__PURE__ */ import_react.default.createElement("div", { className: "privacy-lines" }, "Raw camera frames \u2014 never stored", /* @__PURE__ */ import_react.default.createElement("br", null), "Face landmarks \u2014 used briefly, then discarded", /* @__PURE__ */ import_react.default.createElement("br", null), "Blink rate, distance \u2014 stored locally only", /* @__PURE__ */ import_react.default.createElement("br", null), "Daily eye score \u2014 yours alone")), /* @__PURE__ */ import_react.default.createElement("div", { className: "onboard-btns" }, /* @__PURE__ */ import_react.default.createElement("button", { className: "btn-secondary", onClick: () => window.close() }, "Not now"), /* @__PURE__ */ import_react.default.createElement("button", { className: "btn-primary", onClick: onAllow }, "Allow camera access"))));
       }
       var container = document.getElementById("root");
       if (container) {

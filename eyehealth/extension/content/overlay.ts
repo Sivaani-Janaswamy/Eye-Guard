@@ -19,55 +19,58 @@ let keepaliveInterval: any = null;
  * Injects a floating alert notification into the corner of the active webpage.
  */
 export function injectAlert(alert: AlertEvent): void {
+  // Inject demo styles directly into page if not already there
+  const STYLES_ID = 'eyeguard-alert-styles';
+  if (!document.getElementById(STYLES_ID)) {
+    const style = document.createElement('style');
+    style.id = STYLES_ID;
+    style.innerHTML = `
+      :root {
+        --eg-bg: #ffffff;
+        --eg-text-p: #1a1a18;
+        --eg-text-s: #6b6a63;
+        --eg-border: rgba(0,0,0,0.15);
+        --eg-amber: #EF9F27;
+        --eg-red: #E24B4A;
+        --eg-blue: #378ADD;
+        --eg-secondary: #f5f4f0;
+      }
+      .eg-alert-toast {
+        position: fixed; bottom: 20px; right: 20px; z-index: 2147483647;
+        background: var(--eg-bg); border: 0.5px solid var(--eg-border); border-radius: 12px;
+        padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: -apple-system, sans-serif;
+        max-width: 320px; animation: egFadeIn 0.2s ease;
+      }
+      @keyframes egFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+      .eg-alert-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+      .eg-dot-amber { background: var(--eg-amber); } .eg-dot-red { background: var(--eg-red); } .eg-dot-blue { background: var(--eg-blue); }
+      .eg-alert-body { flex: 1; }
+      .eg-alert-title { font-size: 13px; font-weight: 500; color: var(--eg-text-p); margin-bottom: 2px; }
+      .eg-alert-sub { font-size: 12px; color: var(--eg-text-s); }
+      .eg-alert-actions { display: flex; gap: 6px; flex-shrink: 0; }
+      .eg-alert-btn { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 0.5px solid var(--eg-border); background: var(--eg-secondary); cursor: pointer; color: var(--eg-text-s); }
+    `;
+    document.head.appendChild(style);
+  }
+
   const alertBox = document.createElement("div");
-  alertBox.style.position = "fixed";
-  alertBox.style.bottom = "20px";
-  alertBox.style.right = "20px";
-  alertBox.style.zIndex = "999999";
-  alertBox.style.backgroundColor = "white";
-  alertBox.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
-  alertBox.style.padding = "16px";
-  alertBox.style.borderRadius = "8px";
-  alertBox.style.fontFamily = "sans-serif";
-  alertBox.style.fontSize = "14px";
-  alertBox.style.color = "#333";
-  alertBox.style.maxWidth = "320px";
-  alertBox.style.display = "flex";
-  alertBox.style.flexDirection = "column";
-  alertBox.style.gap = "12px";
+  alertBox.className = "eg-alert-toast";
 
-  const messageSpan = document.createElement("span");
-  messageSpan.textContent = alert.message;
-  messageSpan.style.fontWeight = "500";
-  alertBox.appendChild(messageSpan);
+  const dotClass = alert.severity === 'critical' ? 'eg-dot-red' : alert.severity === 'warning' ? 'eg-dot-amber' : 'eg-dot-blue';
+  
+  alertBox.innerHTML = `
+    <div class="eg-alert-dot ${dotClass}"></div>
+    <div class="eg-alert-body">
+      <div class="eg-alert-title">${alert.message.split(' — ')[0]}</div>
+      <div class="eg-alert-sub">${alert.message.split(' — ')[1] || 'Action recommended'}</div>
+    </div>
+    <div class="eg-alert-actions">
+      <button class="eg-alert-btn" id="eg-snooze">5 min</button>
+      <button class="eg-alert-btn" id="eg-dismiss">Dismiss</button>
+    </div>
+  `;
 
-  const buttonRow = document.createElement("div");
-  buttonRow.style.display = "flex";
-  buttonRow.style.gap = "8px";
-  buttonRow.style.justifyContent = "flex-end";
-
-  const dismissBtn = document.createElement("button");
-  dismissBtn.textContent = "Dismiss";
-  dismissBtn.style.border = "none";
-  dismissBtn.style.background = "#eeeeee";
-  dismissBtn.style.padding = "6px 12px";
-  dismissBtn.style.borderRadius = "4px";
-  dismissBtn.style.cursor = "pointer";
-  dismissBtn.style.fontWeight = "600";
-
-  const snoozeBtn = document.createElement("button");
-  snoozeBtn.textContent = "Snooze (5m)";
-  snoozeBtn.style.border = "none";
-  snoozeBtn.style.background = "#007bff";
-  snoozeBtn.style.color = "white";
-  snoozeBtn.style.padding = "6px 12px";
-  snoozeBtn.style.borderRadius = "4px";
-  snoozeBtn.style.cursor = "pointer";
-  snoozeBtn.style.fontWeight = "600";
-
-  buttonRow.appendChild(dismissBtn);
-  buttonRow.appendChild(snoozeBtn);
-  alertBox.appendChild(buttonRow);
   document.body.appendChild(alertBox);
 
   let isCleanedUp = false;
@@ -79,7 +82,7 @@ export function injectAlert(alert: AlertEvent): void {
 
   const autoDismissTimer = setTimeout(cleanup, 8000);
 
-  dismissBtn.addEventListener("click", () => {
+  alertBox.querySelector('#eg-dismiss')?.addEventListener("click", () => {
     clearTimeout(autoDismissTimer);
     try {
       chrome.runtime.sendMessage({ type: "ALERT_DISMISSED", payload: { alertId: alert.alertId } });
@@ -87,7 +90,7 @@ export function injectAlert(alert: AlertEvent): void {
     cleanup();
   });
 
-  snoozeBtn.addEventListener("click", () => {
+  alertBox.querySelector('#eg-snooze')?.addEventListener("click", () => {
     clearTimeout(autoDismissTimer);
     try {
       chrome.runtime.sendMessage({ type: "ALERT_SNOOZED", payload: { alertId: alert.alertId, minutes: 5 } });

@@ -3,59 +3,51 @@ import type { DailyEyeScore } from '@extension/db/schema';
 
 export function ScoreCard({ scoreData }: { scoreData: DailyEyeScore | null }) {
   const getBadgeStyle = (risk: string) => {
-    if (risk === "low") return "bg-green-500/20 text-green-400 border-green-500/30";
-    if (risk === "moderate") return "bg-amber-500/20 text-amber-400 border-amber-500/30";
-    return "bg-red-500/20 text-red-500 border-red-500/30";
+    if (risk === "low") return "badge-green";
+    if (risk === "moderate") return "badge-amber";
+    return "badge-red";
   };
 
-  const scoreText = getBadgeStyle(scoreData?.riskLevel || "low");
+  const score = scoreData?.score ?? 100;
+  const riskLabel = scoreData?.riskLevel ?? "low";
 
   return (
-    <div className="glassmorphism p-6 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden">
-      <div className="absolute top-4 left-4 text-white/50 text-xs font-semibold uppercase tracking-wider">
-        Today's Overview
-      </div>
+    <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)' }} className="p-6 rounded-2xl flex flex-col items-center gap-4 h-full justify-center">
+      <h3 className="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em]">Today's eye score</h3>
       
-      {scoreData?.myopiaRiskFlag && (
-        <div className="absolute top-4 right-4 bg-red-500/20 text-red-400 text-xs px-2 py-1 rounded border border-red-500/30 font-bold">
-          ⚠️ HIGH RISK
+      <div className="flex flex-col items-center gap-2">
+        <div style={{ 
+          fontSize: '64px', fontWeight: 700, lineHeight: 1,
+          color: score >= 75 ? 'var(--green-text)' : score >= 50 ? 'var(--amber-text)' : 'var(--red-text)'
+        }}>
+          {score}
         </div>
-      )}
-
-      <div className="mt-6 flex flex-col items-center">
-        <span className="text-8xl font-extrabold tracking-tighter" style={{ textShadow: "0 4px 24px rgba(0,0,0,0.5)"}}>
-          {scoreData?.score ?? 100}
-        </span>
-        <span className={`mt-4 px-4 py-1 rounded-full text-sm font-semibold border backdrop-blur-md ${scoreText}`}>
-          {scoreData?.riskLevel ? scoreData.riskLevel.toUpperCase() + ' RISK' : 'LOW RISK'}
+        <span className={`badge ${getBadgeStyle(riskLabel)}`} style={{ fontSize: '12px', padding: '4px 12px' }}>
+          {riskLabel.charAt(0).toUpperCase() + riskLabel.slice(1)} Risk
         </span>
       </div>
-      
-      <div className="w-full grid grid-cols-4 gap-4 mt-8">
-        <BreakdownBar label="Screen Time" value={scoreData?.breakdown.screenTimeScore ?? 25} />
-        <BreakdownBar label="Distance" value={scoreData?.breakdown.distanceScore ?? 25} />
-        <BreakdownBar label="Blink Rate" value={scoreData?.breakdown.blinkScore ?? 25} />
-        <BreakdownBar label="Lighting" value={scoreData?.breakdown.lightingScore ?? 25} />
+
+      <div className="w-full grid grid-cols-2 gap-4 mt-4">
+        <MiniMetric label="Screen" value={scoreData?.breakdown.screenTimeScore ?? 25} color="var(--amber-text)" />
+        <MiniMetric label="Distance" value={scoreData?.breakdown.distanceScore ?? 25} color="var(--green-text)" />
+        <MiniMetric label="Blinks" value={scoreData?.breakdown.blinkScore ?? 25} color="var(--red-text)" />
+        <MiniMetric label="Lighting" value={scoreData?.breakdown.lightingScore ?? 25} color="var(--green-text)" />
       </div>
     </div>
   );
 }
 
-function BreakdownBar({ label, value }: { label: string, value: number }) {
+function MiniMetric({ label, value, color }: { label: string, value: number, color: string }) {
   const pct = (value / 25) * 100;
-  let color = "bg-green-500";
-  if (pct < 75) color = "bg-amber-500";
-  if (pct < 50) color = "bg-red-500";
-
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="text-[10px] text-white/60 uppercase font-semibold text-center leading-tight h-6">
-        {label}
+    <div className="flex flex-col gap-1.5">
+      <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-white/30">
+        <span>{label}</span>
+        <span style={{ color: 'var(--text-secondary)' }}>{Math.round(value)}</span>
       </div>
-      <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-        <div className={`h-full ${color}`} style={{ width: `${pct}%`, transition: "width 1s ease-out" }} />
+      <div style={{ background: 'var(--border)' }} className="h-1 rounded-full overflow-hidden">
+        <div className="h-full" style={{ width: `${pct}%`, background: color, transition: "width 1s ease-out" }} />
       </div>
-      <div className="text-xs font-bold">{Math.round(value)}/25</div>
     </div>
   );
 }

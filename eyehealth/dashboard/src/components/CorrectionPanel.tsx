@@ -35,21 +35,29 @@ export function CorrectionPanel() {
   if (!profile) return null;
 
   return (
-    <div className="glassmorphism p-6 rounded-2xl flex flex-col">
+    <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)' }} className="p-6 rounded-2xl flex flex-col h-full">
       <h3 className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-6">
         Digital Correction
       </h3>
 
-      <div className="flex gap-2 mb-8 bg-white/5 p-1.5 rounded-lg border border-white/10">
+      <div className="corr-preview mb-6" style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '14px', filter: `contrast(${1 + (profile.contrastBoost || 0) * 0.4}) brightness(${1 - (profile.blueLightFilter || 0) * 0.15}) saturate(${1 - (profile.blueLightFilter || 0) * 0.3}) sepia(${(profile.blueLightFilter || 0) * 0.3})` }}>
+        <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '6px' }}>Preview: text sharpness & contrast</div>
+        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.7' }}>
+          This paragraph shows how your screen will look with correction applied. The blue light filter warms the display, contrast boost improves readability.
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-8 bg-white/5 p-1.5 rounded-lg border border-white/10" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
         {(["off", "office", "night"] as const).map(preset => (
           <button
             key={preset}
             onClick={() => handlePreset(preset)}
             className={`flex-1 text-xs py-2 rounded-md font-semibold transition capitalize ${
               profile.activePreset === preset 
-              ? 'bg-indigo-500 text-white shadow-lg' 
+              ? 'bg-black text-white' 
               : 'text-white/60 hover:bg-white/10 hover:text-white'
             }`}
+            style={profile.activePreset === preset ? { background: 'var(--text-primary)', color: 'var(--bg-primary)' } : { color: 'var(--text-secondary)' }}
           >
             {preset}
           </button>
@@ -64,24 +72,20 @@ export function CorrectionPanel() {
           update={v => handleUpdate('contrastBoost', v)} 
         />
         <SliderControl 
-          label="Edge Sharpness" 
-          val={profile.sharpnessLevel} 
-          min={0} max={1} step={0.1} 
-          update={v => handleUpdate('sharpnessLevel', v)} 
-        />
-        <SliderControl 
-          label="Font Scaling" 
-          val={profile.fontScaleFactor} 
-          min={1} max={2} step={0.1} 
-          update={v => handleUpdate('fontScaleFactor', v)} 
-        />
-        <SliderControl 
           label="Blue Light Filter" 
           val={profile.blueLightFilter} 
           min={0} max={1} step={0.1} 
           update={v => handleUpdate('blueLightFilter', v)} 
         />
+        <SliderControl 
+          label="Font Scaling" 
+          val={profile.fontScaleFactor} 
+          min={1} max={1.5} step={0.05} 
+          update={v => handleUpdate('fontScaleFactor', v)} 
+        />
       </div>
+      
+      <div className="text-[10px] text-white/30 italic mt-6">Blue light filter is a CSS approximation.</div>
     </div>
   );
 }
@@ -89,9 +93,9 @@ export function CorrectionPanel() {
 function SliderControl({ label, val, min, max, step, update }: { label: string, val: number, min: number, max: number, step: number, update: (v: number) => void }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex justify-between text-xs font-medium text-white/80">
+      <div className="flex justify-between text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
         <span>{label}</span>
-        <span>{val.toFixed(1)}</span>
+        <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{(val * 100).toFixed(0)}%</span>
       </div>
       <input 
         type="range" 
@@ -100,7 +104,8 @@ function SliderControl({ label, val, min, max, step, update }: { label: string, 
         step={step} 
         value={val} 
         onChange={e => update(parseFloat(e.target.value))}
-        className="w-full accent-indigo-500 bg-white/10 h-1.5 rounded-lg appearance-none cursor-pointer"
+        className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+        style={{ accentColor: 'var(--text-primary)', background: 'var(--border)' }}
       />
     </div>
   );

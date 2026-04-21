@@ -18,56 +18,43 @@ function Popup() {
     distanceCm: 0, blinkRate: 0, faceDetected: false
   });
 
-  // Load Initial Data
   useEffect(() => {
     const loadData = async () => {
-      // 0. Check Consent
       const consentCount = await db.consent.count();
       setHasConsent(consentCount > 0);
+      if (consentCount === 0) return;
 
-      if (consentCount === 0) return; // Stop here if no consent
-
-      // 1. Fetch Today's Score
       const tzOffset = new Date().getTimezoneOffset() * 60000;
       const todayString = new Date(Date.now() - tzOffset).toISOString().split("T")[0];
       const todayScoreArr = await db.scores.where("date").equals(todayString).toArray();
       if (todayScoreArr.length > 0) {
         setScoreData(todayScoreArr[0]);
       } else {
-        // Mock default if zero records exist so far today
         setScoreData({
-          date: todayString,
-          score: 100,
+          date: todayString, score: 100,
           breakdown: { screenTimeScore: 25, distanceScore: 25, blinkScore: 25, lightingScore: 25 },
-          riskLevel: "low",
-          myopiaRiskFlag: false,
-          totalScreenMinutes: 0
+          riskLevel: "low", myopiaRiskFlag: false, totalScreenMinutes: 0
         });
       }
 
-      // 2. Fetch Active Session
       const sessions = await db.sessions.orderBy("startTime").reverse().limit(1).toArray();
       if (sessions.length > 0 && sessions[0].endTime === null) {
         setActiveSession(sessions[0]);
       }
 
-      // 3. Load Correction Profile State
       const correctionProfileObj = await db.correction.get(1);
-      if (correctionProfileObj && correctionProfileObj.activePreset) {
+      if (correctionProfileObj?.activePreset) {
         setActivePreset(correctionProfileObj.activePreset);
       }
 
-      // 4. Load Theme
       const settings = await chrome.storage.local.get("theme");
       if (settings.theme) setTheme(settings.theme);
     };
-    
     loadData();
-    const interval = setInterval(loadData, 5000); // Polling simple updates dynamically
+    const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // High-frequency Live Stats Polling
   useEffect(() => {
     const poll = setInterval(async () => {
       try {
@@ -81,50 +68,38 @@ function Popup() {
         } else {
           setLiveStats({ distanceCm: 0, blinkRate: 0, faceDetected: false });
         }
-      } catch (e) { /* table not ready yet */ }
+      } catch (e) {}
     }, 2000);
     return () => clearInterval(poll);
   }, []);
 
   const handleGrantConsent = () => {
     chrome.runtime.sendMessage({ type: "GRANT_CONSENT" }, (response) => {
-      if (response?.success) {
-        setHasConsent(true);
-      } else {
-        console.error("Could not save consent");
-      }
+      if (response?.success) setHasConsent(true);
     });
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 75) return "#28a745"; // green
-    if (score >= 50) return "#ffc107"; // amber
-    return "#dc3545"; // red
-  };
-
-  const handleToggleMonitoring = (newVal: boolean) => {
+  const toggleMon = () => {
+    const newVal = !isMonitoring;
     setIsMonitoring(newVal);
-    const msgType = newVal ? "START_MONITORING" : "STOP_MONITORING";
-    chrome.runtime.sendMessage({ type: msgType });
+    chrome.runtime.sendMessage({ type: newVal ? "START_MONITORING" : "STOP_MONITORING" });
   };
 
-  const handleCorrectionPreset = async (presetId: "off" | "office" | "night") => {
+  const setPreset = async (presetId: "off" | "office" | "night") => {
     setActivePreset(presetId);
     const profileObj: CorrectionProfile = { ...CORRECTION_PRESETS[presetId] };
     await db.correction.put({ id: 1, ...profileObj });
-    // Tell content script directly over the active tab if feasible
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs.length > 0 && tabs[0].id) {
+      if (tabs[0]?.id) {
         chrome.tabs.sendMessage(tabs[0].id, { type: "APPLY_CORRECTION", profile: profileObj }).catch(() => {});
       }
     });
   };
-  
+
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
     setTheme(newTheme);
     chrome.storage.local.set({ theme: newTheme });
-    // Inform active tabs to update HUD theme
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach(tab => {
         if (tab.id) chrome.tabs.sendMessage(tab.id, { type: "THEME_CHANGED", theme: newTheme }).catch(() => {});
@@ -132,232 +107,157 @@ function Popup() {
     });
   };
 
-  const isDark = theme === "dark";
-  const colors = {
-    bg: isDark ? "#121212" : "#f8f9fa",
-    card: isDark ? "#1e1e1e" : "#ffffff",
-    text: isDark ? "#e0e0e0" : "#333333",
-    subtext: isDark ? "#aaaaaa" : "#666666",
-    border: isDark ? "#333333" : "#eeeeee",
-    accent: "#6366f1"
-  };
+  if (hasConsent === null) return null;
+  if (!hasConsent) return <ConsentScreen onAllow={handleGrantConsent} />;
 
-  if (hasConsent === null) {
-    return <div style={{ padding: "32px", textAlign: "center", color: "#666" }}>Initialising...</div>;
-  }
-
-  if (!hasConsent) {
-    return <ConsentScreen onAllow={handleGrantConsent} isDark={isDark} colors={colors} />;
-  }
+  const score = scoreData?.score || 100;
+  const riskClass = score >= 75 ? "score-green" : score >= 50 ? "score-amber" : "score-red";
+  const badgeClass = score >= 75 ? "badge-green" : score >= 50 ? "badge-amber" : "badge-red";
+  const riskLabel = score >= 75 ? "Low risk" : score >= 50 ? "Moderate risk" : "High risk";
 
   return (
-    <div style={{ 
-      display: "flex", 
-      flexDirection: "column", 
-      minHeight: "500px",
-      maxHeight: "500px",
-      width: "400px",
-      padding: "16px", 
-      gap: "16px", 
-      backgroundColor: colors.bg, 
-      color: colors.text,
-      transition: "background-color 0.3s ease, color 0.3s ease",
-      overflowY: "auto",
-      boxSizing: "border-box"
-    }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2 style={{ margin: 0, fontSize: "18px" }}>EyeGuard</h2>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <span 
-            style={{ cursor: "pointer", fontSize: "18px", userSelect: "none" }} 
-            onClick={toggleTheme}
-            title={`Switch to ${isDark ? "Light" : "Dark"} Mode`}
-          >
-            {isDark ? "☀️" : "🌙"}
-          </span>
-          <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", cursor: "pointer" }}>
-            <input type="checkbox" checked={isMonitoring} onChange={(e) => handleToggleMonitoring(e.target.checked)} /> Active
-          </label>
-          <span style={{ cursor: "pointer", fontSize: "16px" }} onClick={() => setShowSettings(!showSettings)}>⚙️</span>
+    <div className="ext-popup">
+      <div className="ext-header">
+        <div className="ext-header-row">
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <h2 className="ext-title" style={{ margin: 0 }}>EyeGuard</h2>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: "4px" }}>
+              <span style={{ cursor: "pointer", fontSize: "14px", opacity: 0.7 }} onClick={toggleTheme}>
+                {theme === "dark" ? "☀️" : "🌙"}
+              </span>
+              <span style={{ cursor: "pointer", fontSize: "14px", opacity: 0.7 }} onClick={() => setShowSettings(!showSettings)}>⚙️</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span className={`mon-status ${isMonitoring ? "mon-on" : "mon-off"}`}>
+              {isMonitoring ? "Monitoring on" : "Monitoring off"}
+            </span>
+            <div className={`toggle ${isMonitoring ? "on" : ""}`} onClick={toggleMon}>
+              <div className="toggle-thumb"></div>
+            </div>
+          </div>
         </div>
+
+        {!showSettings && (
+          <div style={{ textAlign: "center", padding: "8px 0 12px" }}>
+            <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "4px" }}>Today's eye score</div>
+            <div className={`big-score ${riskClass}`}>{score}</div>
+            <div style={{ marginTop: "8px" }}><span className={`badge ${badgeClass}`}>{riskLabel}</span></div>
+          </div>
+        )}
       </div>
 
-      {!showSettings ? (
-        <>
-          {/* Main Score UI */}
-          <div style={{ 
-            textAlign: "center", 
-            padding: "12px", 
-            background: colors.card, 
-            borderRadius: "8px", 
-            boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)",
-            border: isDark ? `1px solid ${colors.border}` : "none"
-          }}>
-            <div style={{ fontSize: "14px", color: colors.subtext }}>Today's EyeScore</div>
-            <div style={{ fontSize: "64px", fontWeight: "bold", color: getScoreColor(scoreData?.score || 100), lineHeight: "1.1" }}>
-              {scoreData?.score || 100}
-            </div>
+      <div className="ext-body">
+        {showSettings ? (
+          <SettingsPanel onBack={() => setShowSettings(false)} />
+        ) : (
+          <>
+            <div className="section-title">Score breakdown</div>
+            <ProgressItem label="Screen time" value={scoreData?.breakdown.screenTimeScore || 0} color="var(--amber-text)" />
+            <ProgressItem label="Distance" value={scoreData?.breakdown.distanceScore || 0} color="var(--green-text)" />
+            <ProgressItem label="Blink rate" value={scoreData?.breakdown.blinkScore || 0} color="var(--red-text)" />
+            <ProgressItem label="Lighting" value={scoreData?.breakdown.lightingScore || 0} color="var(--green-text)" />
             
-            <div style={{ marginTop: "12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-              <ProgressItem label="Screen Time" value={scoreData?.breakdown.screenTimeScore || 25} max={25} isDark={isDark} colors={colors} />
-              <ProgressItem label="Distance" value={scoreData?.breakdown.distanceScore || 25} max={25} isDark={isDark} colors={colors} />
-              <ProgressItem label="Blinks" value={scoreData?.breakdown.blinkScore || 25} max={25} isDark={isDark} colors={colors} />
-              <ProgressItem label="Lighting" value={scoreData?.breakdown.lightingScore || 25} max={25} isDark={isDark} colors={colors} />
+            <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: "12px", margin: "16px 0", display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+              <span style={{ color: "var(--text-secondary)" }}>⏱️ {activeSession ? Math.round((Date.now() - activeSession.startTime) / 60000) : 0}m session</span>
+              <span style={{ color: "var(--text-secondary)" }}>👀 {liveStats.blinkRate} bpm</span>
+              <span style={{ color: "var(--text-secondary)" }}>📏 {liveStats.distanceCm}cm</span>
             </div>
-          </div>
 
-          {/* Current Session Stats */}
-          <div style={{ 
-            background: colors.card, 
-            padding: "12px", 
-            borderRadius: "8px", 
-            border: isDark ? `1px solid ${colors.border}` : "none",
-            boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)" 
-          }}>
-            <div style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "8px" }}>
-              Current Session {liveStats.faceDetected ? "🟢" : "🔴"}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-              <div>⏱️ {activeSession ? Math.round((Date.now() - activeSession.startTime) / 60000) : 0}m</div>
-              <div>👀 {liveStats.blinkRate} bpm</div>
-              <div>📏 {liveStats.distanceCm} cm</div>
-            </div>
-            <div style={{ fontSize: "10px", color: colors.subtext, textAlign: "center", marginTop: "4px" }}>
-              {liveStats.faceDetected ? 'Tracking' : 'No face detected'}
-            </div>
-          </div>
-
-          {/* Quick Correction */}
-          <div style={{ 
-            background: colors.card, 
-            padding: "12px", 
-            borderRadius: "8px", 
-            border: isDark ? `1px solid ${colors.border}` : "none",
-            boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)" 
-          }}>
-            <div style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "8px" }}>Display Correction</div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              {(["off", "office", "night"] as const).map(preset => (
-                <button
-                  key={preset}
-                  onClick={() => handleCorrectionPreset(preset)}
-                  style={{
-                    flex: 1, padding: "8px", border: "none", borderRadius: "4px",
-                    background: activePreset === preset ? colors.accent : (isDark ? "#2a2a2a" : "#f1f1f1"),
-                    color: activePreset === preset ? "white" : colors.text,
-                    cursor: "pointer", textTransform: "capitalize", fontSize: "12px",
-                    transition: "background-color 0.2s"
-                  }}
-                >
-                  {preset}
-                </button>
+            <div style={{ borderTop: "0.5px solid var(--border)", margin: "12px 0" }}></div>
+            <div className="section-title">Digital correction</div>
+            <div className="preset-row">
+              {(["off", "office", "night"] as const).map(p => (
+                <div key={p} className={`preset-btn ${activePreset === p ? "on" : ""}`} onClick={() => setPreset(p)}>
+                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                </div>
               ))}
             </div>
+            <button className="view-btn" onClick={() => chrome.tabs.create({ url: "/dist/dashboard/index.html" })}>
+              View full dashboard
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProgressItem({ label, value, color }: { label: string, value: number, color: string }) {
+  return (
+    <div className="bar-row">
+      <span className="bar-label">{label}</span>
+      <div className="bar-track">
+        <div className="bar-fill" style={{ width: `${(value / 25) * 100}%`, background: color }}></div>
+      </div>
+      <span className="bar-pts">{Math.round(value)}</span>
+    </div>
+  );
+}
+
+function SettingsPanel({ onBack }: { onBack: () => void }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="section-title" style={{ margin: 0 }}>Alert Thresholds</div>
+        <button className="badge badge-blue" style={{ border: "none", cursor: "pointer" }} onClick={onBack}>Back</button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "14px", fontSize: "12px" }}>
+        <div className="slider-row" style={{ margin: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+            <span>Min Distance (cm)</span>
+            <span style={{ fontWeight: 600 }}>50cm</span>
           </div>
-
-          {/* Dashboard Link */}
-          <button 
-            onClick={() => chrome.tabs.create({ url: "chrome-extension://" + chrome.runtime.id + "/dist/dashboard/index.html" })}
-            style={{ 
-              marginTop: "auto", 
-              padding: "12px", 
-              background: isDark ? "#333" : "#333", 
-              color: "white", 
-              border: "none", 
-              borderRadius: "6px", 
-              cursor: "pointer", 
-              fontWeight: "bold",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
-            }}>
-            View Dashboard
-          </button>
-        </>
-      ) : (
-        <SettingsPanel isDark={isDark} colors={colors} />
-      )}
-    </div>
-  );
-}
-
-function ProgressItem({ label, value, max, isDark, colors }: { label: string, value: number, max: number, isDark: boolean, colors: any }) {
-  const pct = (value / max) * 100;
-  let color = "#28a745";
-  if (pct < 75) color = "#ffc107";
-  if (pct < 50) color = "#dc3545";
-  
-  return (
-    <div style={{ fontSize: "11px", textAlign: "left", color: colors.text }}>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span>{label}</span>
-        <span style={{ color: colors.subtext }}>{Math.round(value)}/{max}</span>
-      </div>
-      <div style={{ height: "4px", background: isDark ? "#333" : "#e9ecef", borderRadius: "2px", marginTop: "2px" }}>
-        <div style={{ height: "100%", background: color, width: `${pct}%`, borderRadius: "2px" }}></div>
+          <input type="range" min="30" max="80" defaultValue="50" style={{ width: "100%" }} />
+        </div>
+        <div className="slider-row" style={{ margin: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+            <span>Min Blink Rate (bpm)</span>
+            <span style={{ fontWeight: 600 }}>15bpm</span>
+          </div>
+          <input type="range" min="5" max="30" defaultValue="15" style={{ width: "100%" }} />
+        </div>
+        <div className="slider-row" style={{ margin: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+            <span>Min Lighting (lux)</span>
+            <span style={{ fontWeight: 600 }}>50 lux</span>
+          </div>
+          <input type="range" min="10" max="200" defaultValue="50" style={{ width: "100%" }} />
+        </div>
       </div>
     </div>
   );
 }
 
-function SettingsPanel({ isDark, colors }: { isDark: boolean, colors: any }) {
+function ConsentScreen({ onAllow }: { onAllow: () => void }) {
   return (
-    <div style={{ 
-      background: colors.card, 
-      padding: "14px", 
-      borderRadius: "8px", 
-      border: isDark ? `1px solid ${colors.border}` : "none",
-      boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.05)",
-      color: colors.text
-    }}>
-      <h3 style={{ marginTop: 0, fontSize: "14px" }}>Alert Thresholds</h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "12px" }}>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-           Minimum Distance (cm)
-          <input type="range" min="30" max="80" defaultValue="50" style={{ accentColor: colors.accent }} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-           Minimum Blink Rate (bpm)
-          <input type="range" min="5" max="30" defaultValue="15" style={{ accentColor: colors.accent }} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-           Minimum Brightness (lux)
-          <input type="range" min="10" max="200" defaultValue="50" style={{ accentColor: colors.accent }} />
-        </label>
-      </div>
-    </div>
-  );
-}
+    <div className="ext-popup" style={{ border: "none" }}>
+      <div className="ext-body" style={{ textAlign: "center", padding: "24px 20px" }}>
+        <div className="onboard-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="8" r="4" stroke="#185FA5" stroke-width="1.5"/>
+            <ellipse cx="12" cy="8" rx="2" ry="4" stroke="#185FA5" stroke-width="1"/>
+            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#185FA5" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div className="onboard-title">EyeGuard needs camera access</div>
+        <div className="onboard-sub">Used only to measure your blink rate and screen distance. No video is ever recorded or sent anywhere — all processing happens on your device.</div>
+        
+        <div className="privacy-card">
+          <div className="privacy-title">What stays on your device</div>
+          <div className="privacy-lines">
+            Raw camera frames — never stored<br/>
+            Face landmarks — used briefly, then discarded<br/>
+            Blink rate, distance — stored locally only<br/>
+            Daily eye score — yours alone
+          </div>
+        </div>
 
-function ConsentScreen({ onAllow, isDark, colors }: { onAllow: () => void, isDark: boolean, colors: any }) {
-  return (
-    <div style={{ 
-      display: "flex", 
-      flexDirection: "column", 
-      height: "100%", 
-      padding: "24px", 
-      gap: "20px", 
-      textAlign: "center", 
-      justifyContent: "center", 
-      background: colors.bg,
-      color: colors.text,
-      transition: "background-color 0.3s ease"
-    }}>
-      <div style={{ fontSize: "48px" }}>👁️</div>
-      <h2 style={{ margin: 0, color: colors.text }}>Welcome to EyeGuard</h2>
-      <p style={{ fontSize: "14px", color: colors.subtext, lineHeight: "1.5" }}>
-        To monitor your blink rate and screen distance, we need access to your camera. 
-        <br/><br/>
-        <strong style={{ color: isDark ? "#fff" : "#444" }}>Privacy First:</strong> Processing happens entirely on-device. No images or biometric data ever leave your computer.
-      </p>
-      <button 
-        onClick={onAllow}
-        style={{ marginTop: "10px", padding: "14px", background: colors.accent, color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}
-      >
-        Allow Camera Access
-      </button>
-      <p style={{ fontSize: "11px", color: colors.subtext }}>
-        By clicking Allow, you agree to our privacy-first local monitoring policy.
-      </p>
+        <div className="onboard-btns">
+          <button className="btn-secondary" onClick={() => window.close()}>Not now</button>
+          <button className="btn-primary" onClick={onAllow}>Allow camera access</button>
+        </div>
+      </div>
     </div>
   );
 }

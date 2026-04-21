@@ -18,7 +18,7 @@ export function AlertFeed({ alerts }: { alerts: AlertEvent[] }) {
   };
 
   return (
-    <div className="glassmorphism p-6 rounded-2xl flex flex-col h-full max-h-[400px]">
+    <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)' }} className="p-6 rounded-2xl flex flex-col h-full max-h-[400px]">
       <h3 className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-4">
         Recent Alerts
       </h3>
@@ -30,20 +30,21 @@ export function AlertFeed({ alerts }: { alerts: AlertEvent[] }) {
           </div>
         ) : (
           alerts.map(alert => (
-            <div key={alert.alertId} className="bg-white/5 border border-white/10 p-3 rounded-xl flex items-start justify-between gap-3 transition hover:bg-white/10">
+            <div key={alert.alertId} style={{ background: 'var(--bg-secondary)', border: '0.5px solid var(--border)' }} className="p-3 rounded-xl flex items-start justify-between gap-3 transition hover:opacity-80">
               <div className="flex flex-col">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`w-2 h-2 rounded-full ${alert.severity === 'critical' ? 'bg-red-500' : alert.severity === 'warning' ? 'bg-amber-400' : 'bg-blue-400'}`}></span>
-                  <span className="text-xs text-white/50">{new Date(alert.triggeredAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                  <span className="w-2 h-2 rounded-full" style={{ background: alert.severity === 'critical' ? 'var(--red-text)' : alert.severity === 'warning' ? 'var(--amber-text)' : 'var(--blue-text)' }}></span>
+                  <span style={{ color: 'var(--text-tertiary)' }} className="text-[10px] uppercase font-bold tracking-tight">{new Date(alert.triggeredAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                 </div>
-                <div className="text-sm font-medium leading-snug">
+                <div style={{ color: 'var(--text-primary)' }} className="text-sm font-medium leading-snug">
                   {alert.message}
                 </div>
               </div>
               {!alert.dismissed && (
                 <button 
                   onClick={() => handleDismiss(alert.alertId)}
-                  className="shrink-0 text-xs px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition font-semibold"
+                  style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', color: 'var(--text-secondary)' }}
+                  className="shrink-0 text-[10px] px-2 py-1 rounded-md transition font-bold uppercase"
                 >
                   Dismiss
                 </button>

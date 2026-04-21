@@ -98,27 +98,57 @@ export default function Dashboard() {
         )}
       </header>
       {/* Diagnostics Panel - Always Visible */}
-      <section className="mb-8">
+      <section className="mb-4">
         <CameraTest />
       </section>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Column: Immediate status & Predictions */}
         <div className="lg:col-span-4 flex flex-col gap-8">
-          <div className="h-[380px]">
+          <div className="h-auto">
              <ScoreCard scoreData={displayScore} />
           </div>
-          <div className="h-[280px]">
+          <div className="h-auto">
              {prediction && <PredictionCard prediction={prediction} />}
           </div>
         </div>
         {/* Center / Right Column: Deep data & Overrides */}
         <div className="lg:col-span-8 flex flex-col gap-8">
           {/* Top Section: Charts */}
-          <div className="flex flex-col h-[380px] min-h-[300px]">
+          <div className="flex flex-col glassmorphism p-6 h-auto min-h-[300px]">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white/50 text-xs font-semibold uppercase tracking-wider">30-day eye score history</h3>
+              <span className="badge badge-amber">Avg: {Math.round(displayHistory.reduce((a,b)=>a+b.score,0)/displayHistory.length)}</span>
+            </div>
             <TrendChart scores={displayHistory} />
+            <div className="text-[11px] text-white/30 text-center mt-4 italic">Connect extension to see real-time data flow</div>
           </div>
+          
+          {/* Metrics Grid 2x2 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="metric-card">
+              <div className="metric-label">Avg screen time</div>
+              <div className="metric-value">{(displayHistory.reduce((a,b)=>a+b.totalScreenMinutes,0)/displayHistory.length/60).toFixed(1)} hrs</div>
+              <div className="text-[11px] mt-1 text-red-400 font-medium">Above 6hr target</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Avg blink rate</div>
+              <div className="metric-value">{(displayHistory.reduce((a,b)=>a+b.breakdown.blinkScore,0)/displayHistory.length).toFixed(1)}/min</div>
+              <div className="text-[11px] mt-1 text-red-400 font-medium">Below 15/min target</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Avg distance</div>
+              <div className="metric-value">{Math.round(displayHistory.reduce((a,b)=>a+b.breakdown.distanceScore,0)/displayHistory.length + 30)} cm</div>
+              <div className="text-[11px] mt-1 text-green-400 font-medium">Within safe range</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Breaks taken</div>
+              <div className="metric-value">14 / 22</div>
+              <div className="text-[11px] mt-1 text-amber-400 font-medium">64% compliance</div>
+            </div>
+          </div>
+
           {/* Bottom Section: Feed and Controls split */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-[380px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-auto">
             <AlertFeed alerts={displayAlerts} />
             <CorrectionPanel />
           </div>
