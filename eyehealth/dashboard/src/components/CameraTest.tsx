@@ -88,6 +88,7 @@ function CameraTest() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number | null>(null);
   const lastLandmarksRef = useRef<number[][] | null>(null);
+  const logFlags = useRef({ videoReady: false, lastLandmarkLog: 0, lastDrawLog: 0, lastFpsLog: 0, lastOverlayLog: 0 });
 
   const [camStatus, setCamStatus] = useState<'off' | 'starting' | 'on' | 'error'>('off');
   const [camError, setCamError] = useState('');
@@ -115,6 +116,20 @@ function CameraTest() {
     }
   }, [liveStats]);
 
+  // ---------------- LANDMARKS SYNC ----------------
+  useEffect(() => {
+    if (liveStats?.landmarks) {
+      lastLandmarksRef.current = liveStats.landmarks;
+      if (Date.now() - logFlags.current.lastLandmarkLog > 2000) {
+        console.log(`[LANDMARKS] Received: exists=true, points=${liveStats.landmarks.length}`);
+        logFlags.current.lastLandmarkLog = Date.now();
+      }
+    } else if (liveStats && Date.now() - logFlags.current.lastLandmarkLog > 2000) {
+      console.log('[LANDMARKS] No landmarks in liveStats');
+      logFlags.current.lastLandmarkLog = Date.now();
+    }
+  }, [liveStats]);
+
   // ---------------- FPS TRACKING ----------------
   useEffect(() => {
     if (!liveStats) return;
@@ -124,6 +139,7 @@ function CameraTest() {
     if (now - lastFpsReset.current >= 1000) {
       const currentFps = fpsCountRef.current;
       setFps(currentFps);
+      console.log(`[FPS] Current rate: ${currentFps}`);
       fpsCountRef.current = 0;
       lastFpsReset.current = now;
     }
@@ -136,6 +152,11 @@ function CameraTest() {
       const video = videoRef.current;
 
       if (canvas && video && video.readyState >= 2) {
+        if (!logFlags.current.videoReady) {
+          console.log('[VIDEO] Video element ready (readyState >= 2)');
+          logFlags.current.videoReady = true;
+        }
+
         const w = video.videoWidth || canvas.width;
         const h = video.videoHeight || canvas.height;
 
@@ -143,8 +164,14 @@ function CameraTest() {
         if (canvas.height !== h) canvas.height = h;
 
         const ctx = canvas.getContext('2d');
-        if (ctx) {
+        if (!ctx) {
+          console.error('[DRAW] Canvas context is null');
+        } else {
           if (lastLandmarksRef.current) {
+            if (Date.now() - logFlags.current.lastDrawLog > 3000) {
+              console.log('[DRAW] Executing drawLandmarks on canvas');
+              logFlags.current.lastDrawLog = Date.now();
+            }
             drawLandmarks(ctx, lastLandmarksRef.current, w, h);
           } else {
             ctx.clearRect(0, 0, w, h);
@@ -172,6 +199,7 @@ function CameraTest() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480, facingMode: 'user' }
       });
+      console.log('[CAM] Permission granted, camera stream started');
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -183,6 +211,7 @@ function CameraTest() {
       setCamError(err?.message ?? 'Camera failed');
     }
   }, []);
+
 
   const stopCamera = useCallback(() => {
     const video = videoRef.current;
@@ -251,6 +280,11 @@ function CameraTest() {
   const faceLeftPct = 10 + normalized * 70; // Map to 10% - 80% range
   const lineWidthPct = Math.max(0, 88 - faceLeftPct);
 
+  if (camStatus === 'on' && Date.now() - logFlags.current.lastOverlayLog > 5000) {
+    console.log('[OVERLAY] Rendering active stats overlay');
+    logFlags.current.lastOverlayLog = Date.now();
+  }
+
   return (
     <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-lg)' }} className="p-6 flex flex-col gap-6">
       <div className="flex justify-between items-center">
@@ -271,6 +305,14 @@ function CameraTest() {
       </div>
 
       <div style={{ width: '100%', height: '80px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', position: 'relative', overflow: 'hidden' }}>
+        <video 
+          ref={videoRef} 
+          id="eyeguard-video" 
+          autoPlay 
+          muted 
+          playsInline 
+          style={{ display: 'none' }} 
+        />
         <div style={{ 
           width: '40px', height: '40px', borderRadius: '50%', border: '2px solid var(--blue-text)', 
           position: 'absolute', top: '50%', left: `${faceLeftPct}%`, transform: 'translateY(-50%)',

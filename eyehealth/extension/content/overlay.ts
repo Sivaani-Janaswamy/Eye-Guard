@@ -2,9 +2,6 @@ import { AlertEvent } from "../db/schema";
 import { applyCorrection, removeCorrection } from "../correction/display-corrector";
 
 // State pointers
-let videoElement: HTMLVideoElement | null = null;
-let captureInterval: number | null = null;
-let cameraRunning = false;
 let hudElement: HTMLDivElement | null = null;
 let hudAccentBar: HTMLDivElement | null = null;
 let hudContent: HTMLDivElement | null = null;
@@ -14,6 +11,10 @@ let currentTheme: 'light' | 'dark' = 'light';
 let websiteStyleElement: HTMLStyleElement | null = null;
 let hudPos = { top: 20, left: 20 };
 let keepaliveInterval: any = null;
+
+// Camera management
+let monitoringStream: MediaStream | null = null;
+let monitoringVideo: HTMLVideoElement | null = null;
 
 const STYLES_BUNDLE_ID = 'eyeguard-styles-bundle';
 
@@ -56,10 +57,14 @@ function ensureStylesInjected() {
 // Ensure styles are injected at the start
 ensureStylesInjected();
 
+// Declare hudVisible globally
+let hudVisible: boolean = false;
+
 /**
  * Injects a floating alert notification into the corner of the active webpage.
  */
 export function injectAlert(alert: AlertEvent): void {
+  console.log(`[HUD] showing alert: ${alert.message}`);
   const alertBox = document.createElement("div");
   alertBox.className = "eg-alert-toast";
 
@@ -149,7 +154,7 @@ export function injectToast(message: string): void {
  * Injects the Status HUD into the webpage.
  */
 function injectStatusHUD(): void {
-  if (hudElement) return;
+  if (hudElement || !hudVisible) return; // Only inject if visible
 
   ensureStylesInjected();
 
@@ -394,7 +399,6 @@ function startKeepalive() {
 
 function stopKeepalive() {
   if (keepaliveInterval) {
-    console.log('[EyeGuard:overlay] STOP keepalive called from:', new Error().stack);
     clearInterval(keepaliveInterval);
     keepaliveInterval = null;
     console.log('[EyeGuard:overlay] Stopped keepalive heartbeat');
@@ -403,8 +407,6 @@ function stopKeepalive() {
 
 /**
  * Injects the Main-World interceptor script.
- * CRITICAL: Also appends the video element to the page DOM so main-world.ts
- * can find it via document.getElementById('eyeguard-video').
  */
 function injectMainInterceptor(): void {
   const script = document.createElement('script');
@@ -433,144 +435,104 @@ async function checkConsent(): Promise<boolean> {
   });
 }
 
-/**
- * Initializes the camera and passes the video element to main-world
- * via a named DOM element so MediaPipe can process it.
- */
-async function initializeCameraLoop() {
-  if (cameraRunning) return;
-  injectStatusHUD();
-
+async function startMonitoring() {
+  if (monitoringStream) return;
+  console.log('[CAM] camera started');
   try {
-    updateStatusHUD('info', "EyeGuard is initializing deep-vision models... Please ensure camera is unobstructed.");
-    console.log('[EyeGuard] Requesting camera...');
-
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    console.log('[EyeGuard] Camera stream acquired');
-    updateStatusHUD('info', "Camera Switched On. Configuring AI engine...");
-    cameraRunning = true;
-
-    // Create video element and give it a known ID so main-world.ts can find it
-    videoElement = document.createElement("video");
-    videoElement.id = "eyeguard-video";           // KEY FIX — named so main-world finds it
-    videoElement.style.position = "fixed";
-    videoElement.style.top = "0";
-    videoElement.style.left = "0";
-    videoElement.style.width = "100vw";
-    videoElement.style.height = "100vh";
-    videoElement.style.zIndex = "1"; // Ensure video is behind other elements
-    videoElement.style.pointerEvents = "none"; // Prevent interaction
-    videoElement.autoplay = true;
-    videoElement.playsInline = true;
-    videoElement.muted = true;
-    videoElement.srcObject = stream;
-
-    // Must be in DOM for MediaPipe to read frames from it
-    (document.body || document.documentElement).appendChild(videoElement);
-
-    // Ensure canvas is properly layered and sized
-    const canvas = document.createElement("canvas");
-    canvas.id = "eyeguard-canvas";
-    canvas.style.position = "fixed";
-    canvas.style.top = "0";
-    canvas.style.left = "0";
-    canvas.style.width = "100vw";
-    canvas.style.height = "100vh";
-    canvas.style.zIndex = "2"; // Ensure canvas is above video
-    canvas.style.pointerEvents = "none"; // Prevent interaction
-    (document.body || document.documentElement).appendChild(canvas);
-
-    await new Promise<void>((resolve) => {
-      if (!videoElement) return resolve();
-      videoElement.onloadedmetadata = () => resolve();
+    monitoringStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' }
     });
-
-    await videoElement.play();
-
-    console.log('[EyeGuard] Monitoring loop starting via Main World bridge');
-    console.log('[EyeGuard] Video dimensions:', videoElement.videoWidth, 'x', videoElement.videoHeight);
-
-    // Signal main-world that video is ready
-    window.postMessage({ type: 'EYEGUARD_VIDEO_READY', videoId: 'eyeguard-video' }, '*');
-
-    startSession();
-    startKeepalive();
-
-  } catch (err: any) {
-    cameraRunning = false;
-    console.error("EyeGuard Camera Initialization Error:", err);
-    if (err.name === 'NotAllowedError') {
-      updateStatusHUD('error', "CAMERA BLOCKED: Please check site permissions.");
-    } else {
-      updateStatusHUD('error', "SYSTEM ERROR: " + err.message);
+    
+    if (!monitoringVideo) {
+      monitoringVideo = document.createElement('video');
+      monitoringVideo.id = 'eyeguard-monitoring-video';
+      monitoringVideo.autoplay = true;
+      monitoringVideo.muted = true;
+      monitoringVideo.playsInline = true;
+      Object.assign(monitoringVideo.style, {
+        position: 'fixed',
+        top: '0',
+        left: '0',
+        width: '1px',
+        height: '1px',
+        opacity: '0',
+        pointerEvents: 'none',
+        zIndex: '-2147483648',
+        display: 'none'
+      });
+      (document.body || document.documentElement).appendChild(monitoringVideo);
     }
+    
+    monitoringVideo.srcObject = monitoringStream;
+    await monitoringVideo.play().catch(e => console.warn('[EyeGuard:CAM] Video play failed:', e));
+    console.log('[DATA] camera stream active');
+  } catch (err) {
+    console.error('[CAM] camera failed:', err);
+    updateStatusHUD('error', 'Camera access denied. Please allow camera for EyeGuard.');
   }
 }
 
-function stopCameraLoop() {
-  if (!cameraRunning) return;
-  console.log('[EyeGuard:overlay] STOP camera loop called from:', new Error().stack);
-
-  if (captureInterval) {
-    clearInterval(captureInterval);
-    captureInterval = null;
+function stopMonitoring() {
+  if (monitoringStream) {
+    monitoringStream.getTracks().forEach(track => track.stop());
+    monitoringStream = null;
   }
-
-  if (videoElement) {
-    if (videoElement.srcObject) {
-      const stream = videoElement.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoElement.srcObject = null;
-    }
-    // Signal main-world to stop processing
-    window.postMessage({ type: 'EYEGUARD_STOP' }, '*');
-    if (videoElement.parentNode) videoElement.parentNode.removeChild(videoElement);
-    videoElement = null;
+  if (monitoringVideo) {
+    monitoringVideo.srcObject = null;
+    monitoringVideo.remove();
+    monitoringVideo = null;
   }
+}
 
-  cameraRunning = false;
+function startHUD() {
+  hudVisible = true;
+  injectStatusHUD();
+  startSession();
+  startKeepalive();
+  updateStatusHUD('info', "EyeGuard Active. Monitoring posture and blinks.");
+  startMonitoring();
+}
+
+function stopHUD() {
+  hudVisible = false;
+  if (hudElement) {
+    hudElement.remove();
+    hudElement = null;
+  }
+  if (hudIconElement) {
+    hudIconElement.remove();
+    hudIconElement = null;
+  }
   stopKeepalive();
-  updateStatusHUD('notice', "Camera Switched Off. Monitoring paused.");
-  console.log('[EyeGuard] Monitoring loop stopped');
+  stopMonitoring();
 }
+
+// Handle visibility change to save resources when tab is backgrounded
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    if (hudVisible) startMonitoring();
+  } else {
+    stopMonitoring();
+  }
+});
 
 // Message listener
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !message.type) return;
 
   if (message.type === 'START_CAMERA') {
-    console.log('[EyeGuard:overlay] START_CAMERA received from SW');
-    if (!cameraRunning) {
-      console.log('[EyeGuard:overlay] Camera was stopped — restarting now');
-      initializeCameraLoop();
-    } else {
-      console.log('[EyeGuard:overlay] Camera already running — ignoring');
-    }
+    startHUD();
     sendResponse({ ok: true });
     return true;
   }
 
   if (message.type === 'CONSENT_GRANTED') {
-    if (!cameraRunning) initializeCameraLoop();
+    startHUD();
     return true;
   }
 
   if (message.type === 'STOP_CAMERA' || message.type === 'STOP_MONITORING') {
-    console.log('[EyeGuard:overlay] STOP message received — verifying consent');
-    setTimeout(() => {
-      chrome.runtime.sendMessage({ type: 'CHECK_CONSENT' }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.warn('[EyeGuard:overlay] Could not reach SW for consent check');
-          return;
-        }
-        if (response?.granted === true) {
-          console.log('[EyeGuard:overlay] STOP ignored — consent is valid');
-          return;
-        }
-        console.log('[EyeGuard:overlay] STOP confirmed — stopping');
-        stopCameraLoop();
-      });
-    }, 300);
+    stopHUD();
     return true;
   }
 
@@ -623,32 +585,19 @@ window.addEventListener('message', (event) => {
       landmarks: frameData.landmarks
     }
   }).catch(() => {});
-
-  if (Date.now() % 5000 < 200) {
-    console.log('[EyeGuard:overlay] Frame forwarded:',
-      'dist:', Math.round(frameData.screenDistanceCm),
-      'blink:', Math.round(frameData.blinkRate),
-      'face:', frameData.faceDetected);
-  }
 });
 
 // Bootstrapper
 (async () => {
   injectMainInterceptor();
 
-  const settings = await chrome.storage.local.get('theme');
-  currentTheme = settings.theme || 'light';
+  const storage = await chrome.storage.local.get('theme');
+  currentTheme = storage.theme || 'light';
 
-  injectStatusHUD();
   updateWebsiteTheme();
-  updateStatusHUD('info', "[EyeGuard] System check... verifying permissions.");
 
   const alreadyGranted = await checkConsent();
   if (alreadyGranted) {
-    console.log('[EyeGuard:overlay] Consent confirmed on load — starting camera');
-    initializeCameraLoop();
-  } else {
-    console.log('[EyeGuard:overlay] No consent on load — waiting for START_CAMERA');
-    updateStatusHUD('notice', "EyeGuard ready. Please grant camera access via the extension popup.");
+    startHUD();
   }
 })();

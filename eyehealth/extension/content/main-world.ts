@@ -118,7 +118,7 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
 
       // Logging
       if (self._egFrameCount % 90 === 0) {
-        console.log(`[EyeGuard] dist: ${Math.round(distanceCm)}cm | blinkRate: ${blinkRate} | EAR: ${smoothEAR.toFixed(3)}`);
+        console.log(`[DATA] values computed | dist: ${Math.round(distanceCm)}cm | blinkRate: ${blinkRate} | EAR: ${smoothEAR.toFixed(3)}`);
       }
 
       const frame = {
@@ -159,6 +159,7 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
     if (videoElement && videoElement.readyState >= 2) {
       try {
         if (faceMesh) {
+          if (framesSent % 60 === 0) console.log('[MESH] processing frame');
           await faceMesh.send({ image: videoElement });
           framesSent++;
         }
@@ -169,17 +170,13 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
 
     const now = Date.now();
     if (now - lastFrameLog > 5000) {
-      console.log('[EyeGuard:main-world] frames sent to MediaPipe:', framesSent);
+      console.log('[DATA] frames sent to MediaPipe:', framesSent);
       framesSent = 0;
       lastFrameLog = now;
     }
 
     animFrameId = requestAnimationFrame(processFrame);
   }
-
-  document.addEventListener('visibilitychange', () => {
-    console.log('[EyeGuard:main-world] Visibility:', document.hidden ? 'hidden' : 'visible', '- skipping processing if hidden');
-  });
 
   function startProcessingLoop() {
     if (animFrameId !== null) return; // already running
@@ -188,22 +185,38 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
     animFrameId = requestAnimationFrame(processFrame);
   }
 
-  // Monitor for video element injected by overlay.ts
+  // Monitor for video element
   const findVideoAndStart = () => {
-    videoElement = document.querySelector('video') as HTMLVideoElement;
+    // Prioritize EyeGuard monitoring video, then manual test video, then any video
+    videoElement = (
+      document.getElementById('eyeguard-monitoring-video') || 
+      document.getElementById('eyeguard-video') || 
+      document.querySelector('video')
+    ) as HTMLVideoElement;
+    
     if (videoElement) {
-        console.log('[EyeGuard:main-world] video detected, waiting for metadata...');
-        videoElement.onloadedmetadata = () => {
+        if (videoElement.id === 'eyeguard-monitoring-video') {
+            console.log('[EyeGuard:main-world] monitoring video detected');
+        } else {
+            console.log('[EyeGuard:main-world] alternative video source detected');
+        }
+        
+        const onMetadata = () => {
             console.log('[EyeGuard:main-world] metadata loaded, playing...');
             videoElement!.play().then(() => {
                 console.log('[EyeGuard:main-world] Video playing, starting loop');
                 startProcessingLoop();
             }).catch(e => {
-                console.warn('[EyeGuard:main-world] video.play() failed - might need interaction', e);
-                // Fallback: start anyway
+                console.warn('[EyeGuard:main-world] video.play() failed', e);
                 startProcessingLoop();
             });
         };
+
+        if (videoElement.readyState >= 1) {
+            onMetadata();
+        } else {
+            videoElement.onloadedmetadata = onMetadata;
+        }
     } else {
         setTimeout(findVideoAndStart, 1000);
     }

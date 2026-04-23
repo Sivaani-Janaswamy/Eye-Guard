@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "EyeGuard",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "AI Vision Health & Digital Correction System. Like Grammarly, but for your eyes.",
 
   "permissions": [

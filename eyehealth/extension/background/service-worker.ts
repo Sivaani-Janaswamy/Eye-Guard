@@ -289,7 +289,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           lux: Math.round(frame.ambientLuxLevel),
           faceDetected: frame.faceDetected,
           confidence: frame.confidence || 0,
-          landmarks: null, // Privacy rule: never persist landmarks
+          landmarks: frame.landmarks, // Allowed for live visualization
           updatedAt: now
         }).catch((err) => console.error('[EyeGuard:SW] live_stats write failed:', err));
       }
