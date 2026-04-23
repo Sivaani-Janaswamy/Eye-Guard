@@ -21,11 +21,64 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
   const earHistory: number[] = [];
   const blinkTimestamps: number[] = []; // Proper rolling window
   let isBlinking = false;
+  let lastLux = 100;
+  let smoothedLux = 0; // Persistent smoothed value
+
+  // Offscreen canvas for lighting computation
+  const lightingCanvas = document.createElement('canvas');
+  lightingCanvas.width = 40; // Small size for fast processing
+  lightingCanvas.height = 30;
+  const lightingCtx = lightingCanvas.getContext('2d', { willReadFrequently: true });
 
   // Constants
   const IPD_CM = 6.3;
   const APPROX_FOCAL = 600;
   const EAR_THRESHOLD = 0.21;
+
+  function computeAmbientLux(): number {
+    if (!videoElement || !lightingCtx || videoElement.readyState < 2) return Math.round(smoothedLux || lastLux);
+
+    try {
+      // Draw small version for performance
+      lightingCtx.drawImage(videoElement, 0, 0, lightingCanvas.width, lightingCanvas.height);
+      const data = lightingCtx.getImageData(0, 0, lightingCanvas.width, lightingCanvas.height).data;
+      
+      let totalBrightness = 0;
+      let sampleCount = 0;
+
+      // Sample every 4th pixel (step of 16 in rgba array)
+      for (let i = 0; i < data.length; i += 16) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        totalBrightness += (r + g + b) / 3;
+        sampleCount++;
+      }
+
+      const avgBrightness = totalBrightness / (sampleCount || 1);
+      // Map 0-255 brightness to 0-500 lux range
+      let rawLux = Math.round((avgBrightness / 255) * 500);
+      
+      // Initialize if first frame
+      if (smoothedLux === 0) {
+        smoothedLux = rawLux;
+      }
+
+      // Clamp sudden extreme spikes (sensor noise / sudden screen flash)
+      if (Math.abs(rawLux - smoothedLux) > 150) {
+        rawLux = smoothedLux + (rawLux > smoothedLux ? 50 : -50);
+      }
+
+      // Exponential Moving Average (EMA) smoothing
+      // 0.8 weight on history, 0.2 on new data
+      smoothedLux = (0.8 * smoothedLux) + (0.2 * rawLux);
+      
+      lastLux = Math.round(smoothedLux);
+      return lastLux;
+    } catch (e) {
+      return Math.round(smoothedLux || lastLux);
+    }
+  }
 
   // Initialize FaceMesh with correct locateFile path
   try {
@@ -50,14 +103,15 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
       self._egFrameCount = (self._egFrameCount || 0) + 1;
 
       if (faceCount === 0) {
+        const lux = computeAmbientLux();
         window.postMessage({
           type: 'EYEGUARD_FRAME',
           payload: {
             faceDetected: false,
             screenDistanceCm: -1,
             blinkRate: 0,
-            ambientLuxLevel: 0,
-            isLowLight: false,
+            ambientLuxLevel: lux,
+            isLowLight: lux < 50,
             confidence: 0,
             timestamp: now,
             landmarks: []
@@ -121,14 +175,16 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
         console.log(`[DATA] values computed | dist: ${Math.round(distanceCm)}cm | blinkRate: ${blinkRate} | EAR: ${smoothEAR.toFixed(3)}`);
       }
 
+      const lux = computeAmbientLux();
+
       const frame = {
         type: 'EYEGUARD_FRAME',
         payload: {
           faceDetected: true,
           screenDistanceCm: distanceCm,
           blinkRate: blinkRate,
-          ambientLuxLevel: 100,
-          isLowLight: false,
+          ambientLuxLevel: lux,
+          isLowLight: lux < 50,
           confidence: 0, // removed fake confidence
           timestamp: now,
           landmarks: landmarks ? landmarks.map(pt => [pt.x, pt.y, pt.z ?? 0]) : []

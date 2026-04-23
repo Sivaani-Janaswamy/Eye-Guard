@@ -12,9 +12,46 @@ let websiteStyleElement: HTMLStyleElement | null = null;
 let hudPos = { top: 20, left: 20 };
 let keepaliveInterval: any = null;
 
+// Declare hudVisible globally
+let hudVisible: boolean = false;
+
+// Toast State
+let isToastMinimized = false;
+let lastReceivedAlert: AlertEvent | null = null;
+let currentToastElement: HTMLElement | null = null;
+let toastIconElement: HTMLElement | null = null;
+let lottieInstance: any = null;
+
+function loadLottie(): Promise<any> {
+  return new Promise((resolve) => {
+    if ((window as any).lottie) {
+      resolve((window as any).lottie);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js";
+    script.onload = () => resolve((window as any).lottie);
+    (document.head || document.documentElement).appendChild(script);
+  });
+}
+
 // Camera management
 let monitoringStream: MediaStream | null = null;
 let monitoringVideo: HTMLVideoElement | null = null;
+
+// Alert Logic State
+let alertCounters = {
+  distance: 0,
+  blink: 0,
+  usage: 0,
+  lastAlert: 0
+};
+const ALERT_THRESHOLDS = {
+  DISTANCE_SECS: 5,   // 5 consecutive frames (~2.5s) of low distance
+  BLINK_MINS: 1,      // check every minute
+  USAGE_MINS: 20      // 20-20-20 rule
+};
+let activeAlerts: Map<string, HTMLElement> = new Map();
 
 const STYLES_BUNDLE_ID = 'eyeguard-styles-bundle';
 
@@ -50,23 +87,94 @@ function ensureStylesInjected() {
       align-self: flex-start;
       font-weight: 500;
     }
+    .eg-alert-toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 320px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+      padding: 16px;
+      z-index: 2147483647;
+      display: flex;
+      gap: 12px;
+      font-family: -apple-system, sans-serif;
+      border: 1px solid var(--eg-border);
+      transition: all 0.3s ease;
+    }
+    .eg-alert-toast.minimized {
+      width: 48px;
+      height: 48px;
+      padding: 0;
+      border-radius: 50%;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .eg-alert-toast.minimized .eg-alert-body, 
+    .eg-alert-toast.minimized .eg-alert-actions,
+    .eg-alert-toast.minimized .eg-alert-dot {
+      display: none;
+    }
+    .eg-alert-toast.minimized .eg-alert-icon-min {
+      display: flex !important;
+    }
+    .eg-alert-icon-min {
+      display: none;
+      width: 100%;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+      background: var(--eg-blue);
+    }
+    .eg-alert-icon-min img {
+      width: 24px;
+      height: 24px;
+      filter: brightness(0) invert(1);
+    }
+    .eg-alert-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+    .eg-dot-red { background: var(--eg-red); }
+    .eg-dot-amber { background: var(--eg-amber); }
+    .eg-dot-blue { background: var(--eg-blue); }
+    .eg-alert-body { flex: 1; }
+    .eg-alert-title { font-weight: 700; font-size: 14px; color: var(--eg-text-p); margin-bottom: 2px; }
+    .eg-alert-sub { font-size: 12px; color: var(--eg-text-s); }
+    .eg-alert-actions { display: flex; flex-direction: column; gap: 4px; }
+    .eg-alert-btn { 
+      background: var(--eg-bg-secondary); border: none; padding: 4px 8px; 
+      border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;
+      color: var(--eg-text-p); transition: background 0.2s;
+    }
+    .eg-alert-btn:hover { background: #e0ded7; }
+    .eg-alert-btn.min-btn { background: none; color: var(--eg-blue); }
   `;
   document.head.appendChild(style);
 }
-
-// Ensure styles are injected at the start
-ensureStylesInjected();
-
-// Declare hudVisible globally
-let hudVisible: boolean = false;
 
 /**
  * Injects a floating alert notification into the corner of the active webpage.
  */
 export function injectAlert(alert: AlertEvent): void {
+  lastReceivedAlert = alert;
+  
+  if (isToastMinimized) {
+    // If already minimized, just update the icon state (maybe a subtle pulse)
+    if (!toastIconElement) renderMinimizedIcon();
+    return;
+  }
+
+  renderAlertToast(alert);
+}
+
+function renderAlertToast(alert: AlertEvent) {
+  // Clear existing instances
+  if (currentToastElement) currentToastElement.remove();
+  if (toastIconElement) toastIconElement.remove();
+
   console.log(`[HUD] showing alert: ${alert.message}`);
   const alertBox = document.createElement("div");
   alertBox.className = "eg-alert-toast";
+  currentToastElement = alertBox;
 
   const dotClass = alert.severity === 'critical' ? 'eg-dot-red' : alert.severity === 'warning' ? 'eg-dot-amber' : 'eg-dot-blue';
   
@@ -77,37 +185,85 @@ export function injectAlert(alert: AlertEvent): void {
       <div class="eg-alert-sub">${alert.message.split(' — ')[1] || 'Action recommended'}</div>
     </div>
     <div class="eg-alert-actions">
-      <button class="eg-alert-btn" id="eg-snooze">5 min</button>
+      <button class="eg-alert-btn" id="eg-minimize">Minimize</button>
       <button class="eg-alert-btn" id="eg-dismiss">Dismiss</button>
     </div>
   `;
 
   document.body.appendChild(alertBox);
 
-  let isCleanedUp = false;
-  const cleanup = () => {
-    if (isCleanedUp) return;
-    isCleanedUp = true;
-    if (alertBox.parentNode) alertBox.parentNode.removeChild(alertBox);
+  alertBox.querySelector('#eg-dismiss')?.addEventListener("click", () => {
+    alertBox.remove();
+    currentToastElement = null;
+  });
+
+  alertBox.querySelector('#eg-minimize')?.addEventListener("click", () => {
+    isToastMinimized = true;
+    alertBox.remove();
+    currentToastElement = null;
+    renderMinimizedIcon();
+  });
+}
+
+async function renderMinimizedIcon() {
+  if (toastIconElement) return;
+
+  const iconContainer = document.createElement("div");
+  iconContainer.id = "eg-minimized-icon";
+  toastIconElement = iconContainer;
+
+  Object.assign(iconContainer.style, {
+    position: 'fixed',
+    bottom: '24px',
+    right: '24px',
+    width: '56px',
+    height: '56px',
+    background: 'white',
+    borderRadius: '50%',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+    cursor: 'pointer',
+    zIndex: '2147483647',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+    border: '1px solid var(--eg-border)',
+    overflow: 'hidden'
+  });
+
+  const lottie = await loadLottie();
+  
+  if (lottie) {
+    lottieInstance = lottie.loadAnimation({
+      container: iconContainer,
+      renderer: 'svg',
+      loop: true,
+      autoplay: true,
+      path: chrome.runtime.getURL("assets/eye.json")
+    });
+  } else {
+    // Fallback to static PNG if CDN fails
+    const iconImg = document.createElement("img");
+    iconImg.src = chrome.runtime.getURL("icons/icon48.png");
+    iconImg.style.width = '28px';
+    iconContainer.appendChild(iconImg);
+  }
+
+  iconContainer.addEventListener('mouseenter', () => iconContainer.style.transform = 'scale(1.15)');
+  iconContainer.addEventListener('mouseleave', () => iconContainer.style.transform = 'scale(1)');
+
+  iconContainer.onclick = () => {
+    isToastMinimized = false;
+    if (lottieInstance) {
+      lottieInstance.destroy();
+      lottieInstance = null;
+    }
+    iconContainer.remove();
+    toastIconElement = null;
+    if (lastReceivedAlert) renderAlertToast(lastReceivedAlert);
   };
 
-  const autoDismissTimer = setTimeout(cleanup, 8000);
-
-  alertBox.querySelector('#eg-dismiss')?.addEventListener("click", () => {
-    clearTimeout(autoDismissTimer);
-    try {
-      chrome.runtime.sendMessage({ type: "ALERT_DISMISSED", payload: { alertId: alert.alertId } });
-    } catch(e) {}
-    cleanup();
-  });
-
-  alertBox.querySelector('#eg-snooze')?.addEventListener("click", () => {
-    clearTimeout(autoDismissTimer);
-    try {
-      chrome.runtime.sendMessage({ type: "ALERT_SNOOZED", payload: { alertId: alert.alertId, minutes: 5 } });
-    } catch(e) {}
-    cleanup();
-  });
+  document.body.appendChild(iconContainer);
 }
 
 /**
@@ -455,10 +611,9 @@ async function startMonitoring() {
         left: '0',
         width: '1px',
         height: '1px',
-        opacity: '0',
+        opacity: '0.01',
         pointerEvents: 'none',
-        zIndex: '-2147483648',
-        display: 'none'
+        zIndex: '-2147483648'
       });
       (document.body || document.documentElement).appendChild(monitoringVideo);
     }
@@ -562,15 +717,10 @@ window.addEventListener('message', (event) => {
   if (event.data?.type !== 'EYEGUARD_FRAME') return;
 
   const frameData = event.data.payload;
-
   updateHudStatus(frameData);
 
   if (frameData.faceDetected) {
-    if (frameData.screenDistanceCm < 50) {
-      updateStatusHUD('warning', `POSTURE ALERT: Too close! Move back (${Math.round(frameData.screenDistanceCm)}cm).`);
-    } else {
-      updateStatusHUD('success', `Tracking Active: ${Math.round(frameData.screenDistanceCm)}cm · ${Math.round(frameData.blinkRate)}/min`);
-    }
+    updateStatusHUD('success', `Tracking Active: ${Math.round(frameData.screenDistanceCm)}cm · ${Math.round(frameData.blinkRate)}/min`);
   } else {
     updateStatusHUD('notice', "Searching: No face detected. Align with camera.");
   }
@@ -585,6 +735,24 @@ window.addEventListener('message', (event) => {
       landmarks: frameData.landmarks
     }
   }).catch(() => {});
+});
+
+// Centralized Alert Display
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === 'LIVE_STATS_UPDATE' && message.payload.alerts) {
+    message.payload.alerts.forEach((alert: any) => {
+      injectAlert({
+        alertId: alert.type.toLowerCase(),
+        message: alert.message,
+        severity: alert.severity,
+        timestamp: Date.now()
+      });
+      
+      if (alert.type === 'DISTANCE') {
+        updateStatusHUD('warning', `POSTURE ALERT: Too close! Move back.`);
+      }
+    });
+  }
 });
 
 // Bootstrapper

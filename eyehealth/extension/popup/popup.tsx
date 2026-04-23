@@ -15,7 +15,8 @@ function Popup() {
   
   // Real-time Live Stats
   const [liveStats, setLiveStats] = useState({
-    distanceCm: 0, blinkRate: 0, faceDetected: false
+    distanceCm: 0, blinkRate: 0, faceDetected: false, durationMs: 0,
+    alerts: [] as any[]
   });
 
   useEffect(() => {
@@ -37,6 +38,7 @@ function Popup() {
         });
       }
 
+      // Initial session load (fallback/start state)
       const sessions = await db.sessions.orderBy("startTime").reverse().limit(1).toArray();
       if (sessions.length > 0 && sessions[0].endTime === null) {
         setActiveSession(sessions[0]);
@@ -51,26 +53,32 @@ function Popup() {
       if (settings.theme) setTheme(settings.theme);
     };
     loadData();
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
+    // No more polling here — session time is now event-driven
   }, []);
 
+  const formatTime = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   useEffect(() => {
-    const poll = setInterval(async () => {
-      try {
-        const live = await (db as any).live_stats.get(1);
-        if (live && Date.now() - live.updatedAt < 8000) {
-          setLiveStats({
-            distanceCm: live.distanceCm,
-            blinkRate:  live.blinkRate,
-            faceDetected: live.faceDetected
-          });
-        } else {
-          setLiveStats({ distanceCm: 0, blinkRate: 0, faceDetected: false });
-        }
-      } catch (e) {}
-    }, 2000);
-    return () => clearInterval(poll);
+    const listener = (message: any) => {
+      if (message.type === 'LIVE_STATS_UPDATE') {
+        const live = message.payload;
+        setLiveStats({
+          distanceCm: live.distanceCm,
+          blinkRate: live.blinkRate,
+          faceDetected: live.faceDetected,
+          durationMs: live.durationMs || 0,
+          alerts: live.alerts || []
+        });
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
   }, []);
 
   const handleGrantConsent = () => {
@@ -157,10 +165,16 @@ function Popup() {
             <ProgressItem label="Lighting" value={scoreData?.breakdown.lightingScore || 0} color="var(--green-text)" />
 
             <div className="live-stats">
-              <span>⏱️ {activeSession ? Math.round((Date.now() - activeSession.startTime) / 60000) : 0}m</span>
+              <span>⏱️ {formatTime(liveStats.durationMs)}</span>
               <span>👀 {liveStats.blinkRate} bpm</span>
               <span>📏 {liveStats.distanceCm}cm</span>
             </div>
+
+            {liveStats.alerts.length > 0 && (
+              <div className="live-alert-banner">
+                ⚠️ {liveStats.alerts[liveStats.alerts.length - 1].message.split(' — ')[0]}
+              </div>
+            )}
 
             <div className="divider"></div>
             <div className="section-title">Digital correction</div>

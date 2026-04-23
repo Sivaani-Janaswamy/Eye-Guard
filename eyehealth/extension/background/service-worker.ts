@@ -32,6 +32,7 @@ let activeSessionId: string | null = null;
 let sessionStartTime: number | null = null;
 let isHydrated = false;
 let lastWriteTime = 0; // For time-based throttling
+let lastLandmarks: any[] = []; // Cache for UI stability
 
 // 🔴 NEW: prevents duplicate consent checks
 let isCheckingConsent = false;
@@ -140,7 +141,11 @@ async function checkConsentAndAct() {
       }
 
       if (!tracker.getActiveSession()) {
-        await tracker.startSession().catch(() => {});
+        const session = await tracker.startSession();
+        activeSessionId = session.sessionId;
+        sessionStartTime = session.startTime;
+        await chrome.storage.local.set({ activeSessionId, sessionStartTime });
+        console.log('[EyeGuard:SW] Session started automatically:', activeSessionId);
       }
     }
   } catch (err) {
@@ -205,8 +210,79 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
+// Alert Cooldown State
+let lastAlertTimes: Record<string, number> = {
+  DISTANCE: 0,
+  BLINK: 0,
+  LIGHT: 0,
+  USAGE: 0
+};
+let last2020Trigger = 0; // Usage tracking for stability
+
+function evaluateAlerts(stats: any): any[] {
+  const alerts = [];
+  const now = Date.now();
+
+  // 1. Distance Alert (Cooldown: 10s)
+  if (stats.faceDetected && stats.distanceCm < 50 && (now - lastAlertTimes.DISTANCE > 10000)) {
+    alerts.push({
+      type: 'DISTANCE',
+      message: 'Postural Alert — You are too close to the screen. Please move back.',
+      severity: 'warning'
+    });
+    lastAlertTimes.DISTANCE = now;
+  }
+
+  // 2. Blink Alert (Cooldown: 3m)
+  if (stats.faceDetected && stats.blinkRate < 12 && (now - lastAlertTimes.BLINK > 180000)) {
+    alerts.push({
+      type: 'BLINK',
+      message: 'Blink Reminder — Your blink rate is low. Try to blink more to prevent dry eyes.',
+      severity: 'info'
+    });
+    lastAlertTimes.BLINK = now;
+  }
+
+  // 3. Low Light Alert (Cooldown: 5m)
+  if (stats.lux < 50 && (now - lastAlertTimes.LIGHT > 300000)) {
+    alerts.push({
+      type: 'LIGHT',
+      message: 'Low Light — The room is too dark. Increasing ambient light reduces eye strain.',
+      severity: 'warning'
+    });
+    lastAlertTimes.LIGHT = now;
+  }
+
+  // 4. 20-20-20 Rule (Fixed: triggers exactly every 20 mins)
+  if (stats.durationMs - last2020Trigger >= 1200000 && (now - lastAlertTimes.USAGE > 60000)) {
+    alerts.push({
+      type: 'USAGE',
+      message: '20-20-20 Rule — Time for a break! Look 20 feet away for 20 seconds.',
+      severity: 'info'
+    });
+    lastAlertTimes.USAGE = now;
+    last2020Trigger = stats.durationMs;
+  }
+
+  return alerts;
+}
+
 // -------------------- MESSAGES --------------------
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+
+  if (message.type === 'START_SESSION') {
+    (async () => {
+      if (!tracker.getActiveSession()) {
+        const session = await tracker.startSession();
+        activeSessionId = session.sessionId;
+        sessionStartTime = session.startTime;
+        await chrome.storage.local.set({ activeSessionId, sessionStartTime });
+        console.log('[EyeGuard:SW] Session started via message:', activeSessionId);
+      }
+      sendResponse({ sessionId: activeSessionId });
+    })();
+    return true;
+  }
 
   if (message.type === 'CHECK_CONSENT') {
     (async () => {
@@ -276,10 +352,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (!isHydrated) await hydrateState();
 
       const frame: SensorFrame = message.payload;
+      const now = Date.now();
+      
+      const durationMs = sessionStartTime ? (now - sessionStartTime) : 0;
+
+      // Update landmark cache if valid
+      if (frame.landmarks && frame.landmarks.length > 0) {
+        lastLandmarks = frame.landmarks;
+      }
+
+      const liveStatsPayload = {
+        distanceCm: Math.round(frame.screenDistanceCm),
+        blinkRate: parseFloat(frame.blinkRate.toFixed(1)),
+        lux: Math.round(frame.ambientLuxLevel),
+        faceDetected: frame.faceDetected,
+        confidence: frame.confidence || 0,
+        landmarks: lastLandmarks,
+        durationMs: durationMs,
+        updatedAt: now
+      };
+
+      const alerts = evaluateAlerts(liveStatsPayload);
+      const broadcastData = {
+        type: 'LIVE_STATS_UPDATE',
+        payload: {
+          ...liveStatsPayload,
+          alerts: alerts
+        }
+      };
+
+      // 🚀 1. BROADCAST to Popup/Dashboard (extension pages)
+      chrome.runtime.sendMessage(broadcastData).catch(() => {});
+
+      // 🚀 2. BROADCAST back to the same tab (Overlay)
+      if (sender.tab?.id) {
+        chrome.tabs.sendMessage(sender.tab.id, broadcastData).catch(() => {
+          // Silence errors (content script might not be ready)
+        });
+      }
+
       frameBuffer.push(frame);
 
-      // Throttle writes to ~3 FPS (approx every 300ms)
-      const now = Date.now();
+      // Throttle writes to ~3 FPS for DB history
       if (now - lastWriteTime > 300) {
         lastWriteTime = now;
         db.table('live_stats').put({
@@ -289,7 +403,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           lux: Math.round(frame.ambientLuxLevel),
           faceDetected: frame.faceDetected,
           confidence: frame.confidence || 0,
-          landmarks: frame.landmarks, // Allowed for live visualization
+          landmarks: lastLandmarks, // Store stable landmarks
           updatedAt: now
         }).catch((err) => console.error('[EyeGuard:SW] live_stats write failed:', err));
       }

@@ -18,6 +18,40 @@ export default function Dashboard() {
   const scores = useLiveQuery(() => db.scores.orderBy('date').reverse().toArray(), []);
   const alerts = useLiveQuery(() => db.alerts.orderBy('triggeredAt').reverse().limit(10).toArray(), []);
   const liveStats = useLiveQuery(() => (db as any).live_stats.get(1), []);
+  const activeSession = useLiveQuery(
+    () => db.sessions.orderBy('startTime').reverse().first().then(s => (s && s.endTime === null) ? s : null),
+    []
+  );
+
+  const [sessionTimeMs, setSessionTimeMs] = useState(0);
+
+  const formatTime = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Initial session load (fallback)
+  useEffect(() => {
+    db.sessions.orderBy('startTime').reverse().first().then(s => {
+      if (s && s.endTime === null) {
+        setSessionTimeMs(Date.now() - s.startTime);
+      }
+    });
+  }, []);
+
+  // Sync session time from live stats stream
+  useEffect(() => {
+    const listener = (message: any) => {
+      if (message.type === 'LIVE_STATS_UPDATE' && message.payload.durationMs !== undefined) {
+        setSessionTimeMs(message.payload.durationMs);
+      }
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, []);
+
 
   // Prediction load (not reactive as it changes slowly)
   useEffect(() => {
@@ -84,7 +118,11 @@ export default function Dashboard() {
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">EyeGuard Dashboard</h1>
-          <p className="text-white/50 text-sm mt-1">Holistic tracking map for optical longevity. (Distance: <span className="text-indigo-400 font-mono">{liveDistance}</span>)</p>
+          <p className="text-white/50 text-sm mt-1">
+            Holistic tracking map for optical longevity. 
+            (Distance: <span className="text-indigo-400 font-mono">{liveDistance}</span>
+            {activeSession && <> | Session: <span className="text-indigo-400 font-mono">{formatTime(sessionTimeMs)}</span></>})
+          </p>
           <span className="text-xs text-indigo-400 font-mono">Build: 2026-04-19</span>
         </div>
         {isDemoData && (

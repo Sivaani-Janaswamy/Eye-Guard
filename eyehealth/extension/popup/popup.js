@@ -27745,7 +27745,9 @@
         const [liveStats, setLiveStats] = (0, import_react.useState)({
           distanceCm: 0,
           blinkRate: 0,
-          faceDetected: false
+          faceDetected: false,
+          durationMs: 0,
+          alerts: []
         });
         (0, import_react.useEffect)(() => {
           const loadData = async () => {
@@ -27779,26 +27781,28 @@
             if (settings.theme) setTheme(settings.theme);
           };
           loadData();
-          const interval = setInterval(loadData, 5e3);
-          return () => clearInterval(interval);
         }, []);
+        const formatTime = (ms) => {
+          const totalSeconds = Math.floor(ms / 1e3);
+          const mins = Math.floor(totalSeconds / 60);
+          const secs = totalSeconds % 60;
+          return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+        };
         (0, import_react.useEffect)(() => {
-          const poll = setInterval(async () => {
-            try {
-              const live = await db.live_stats.get(1);
-              if (live && Date.now() - live.updatedAt < 8e3) {
-                setLiveStats({
-                  distanceCm: live.distanceCm,
-                  blinkRate: live.blinkRate,
-                  faceDetected: live.faceDetected
-                });
-              } else {
-                setLiveStats({ distanceCm: 0, blinkRate: 0, faceDetected: false });
-              }
-            } catch (e) {
+          const listener = (message) => {
+            if (message.type === "LIVE_STATS_UPDATE") {
+              const live = message.payload;
+              setLiveStats({
+                distanceCm: live.distanceCm,
+                blinkRate: live.blinkRate,
+                faceDetected: live.faceDetected,
+                durationMs: live.durationMs || 0,
+                alerts: live.alerts || []
+              });
             }
-          }, 2e3);
-          return () => clearInterval(poll);
+          };
+          chrome.runtime.onMessage.addListener(listener);
+          return () => chrome.runtime.onMessage.removeListener(listener);
         }, []);
         const handleGrantConsent = () => {
           chrome.runtime.sendMessage({ type: "GRANT_CONSENT" }, (response) => {
@@ -27838,7 +27842,7 @@
         const riskClass = score >= 75 ? "score-green" : score >= 50 ? "score-amber" : "score-red";
         const badgeClass = score >= 75 ? "badge-green" : score >= 50 ? "badge-amber" : "badge-red";
         const riskLabel = score >= 75 ? "Low risk" : score >= 50 ? "Moderate risk" : "High risk";
-        return /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-popup" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-header" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-header-row" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-title" }, "EyeGuard"), /* @__PURE__ */ import_react.default.createElement("div", { className: "header-controls" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "theme-toggle", onClick: toggleTheme }, theme === "dark" ? "\u2600\uFE0F" : "\u{1F319}"), /* @__PURE__ */ import_react.default.createElement("span", { className: "settings-toggle", onClick: () => setShowSettings(!showSettings) }, "\u2699\uFE0F"), /* @__PURE__ */ import_react.default.createElement("span", { className: `mon-status ${isMonitoring ? "mon-on" : "mon-off"}` }, isMonitoring ? "Monitoring on" : "Monitoring off"), /* @__PURE__ */ import_react.default.createElement("div", { className: `toggle ${isMonitoring ? "on" : ""}`, onClick: toggleMon }, /* @__PURE__ */ import_react.default.createElement("div", { className: "toggle-thumb" })))), !showSettings && /* @__PURE__ */ import_react.default.createElement("div", { className: "score-section" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "score-label" }, "Today's eye score"), /* @__PURE__ */ import_react.default.createElement("div", { className: `big-score ${riskClass}` }, score), /* @__PURE__ */ import_react.default.createElement("div", { className: "badge-container" }, /* @__PURE__ */ import_react.default.createElement("span", { className: `badge ${badgeClass}` }, riskLabel)))), /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-body" }, showSettings ? /* @__PURE__ */ import_react.default.createElement(SettingsPanel, { onBack: () => setShowSettings(false) }) : /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title" }, "Score breakdown"), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Screen time", value: scoreData?.breakdown.screenTimeScore || 0, color: "var(--amber-text)" }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Distance", value: scoreData?.breakdown.distanceScore || 0, color: "var(--green-text)" }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Blink rate", value: scoreData?.breakdown.blinkScore || 0, color: "var(--red-text)" }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Lighting", value: scoreData?.breakdown.lightingScore || 0, color: "var(--green-text)" }), /* @__PURE__ */ import_react.default.createElement("div", { className: "live-stats" }, /* @__PURE__ */ import_react.default.createElement("span", null, "\u23F1\uFE0F ", activeSession ? Math.round((Date.now() - activeSession.startTime) / 6e4) : 0, "m"), /* @__PURE__ */ import_react.default.createElement("span", null, "\u{1F440} ", liveStats.blinkRate, " bpm"), /* @__PURE__ */ import_react.default.createElement("span", null, "\u{1F4CF} ", liveStats.distanceCm, "cm")), /* @__PURE__ */ import_react.default.createElement("div", { className: "divider" }), /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title" }, "Digital correction"), /* @__PURE__ */ import_react.default.createElement("div", { className: "preset-row" }, ["off", "office", "night"].map((p) => /* @__PURE__ */ import_react.default.createElement("div", { key: p, className: `preset-btn ${activePreset === p ? "on" : ""}`, onClick: () => setPreset(p) }, p.charAt(0).toUpperCase() + p.slice(1)))), /* @__PURE__ */ import_react.default.createElement("button", { className: "view-btn", onClick: () => chrome.tabs.create({ url: "/dist/dashboard/index.html" }) }, "View full dashboard"))));
+        return /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-popup" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-header" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-header-row" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-title" }, "EyeGuard"), /* @__PURE__ */ import_react.default.createElement("div", { className: "header-controls" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "theme-toggle", onClick: toggleTheme }, theme === "dark" ? "\u2600\uFE0F" : "\u{1F319}"), /* @__PURE__ */ import_react.default.createElement("span", { className: "settings-toggle", onClick: () => setShowSettings(!showSettings) }, "\u2699\uFE0F"), /* @__PURE__ */ import_react.default.createElement("span", { className: `mon-status ${isMonitoring ? "mon-on" : "mon-off"}` }, isMonitoring ? "Monitoring on" : "Monitoring off"), /* @__PURE__ */ import_react.default.createElement("div", { className: `toggle ${isMonitoring ? "on" : ""}`, onClick: toggleMon }, /* @__PURE__ */ import_react.default.createElement("div", { className: "toggle-thumb" })))), !showSettings && /* @__PURE__ */ import_react.default.createElement("div", { className: "score-section" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "score-label" }, "Today's eye score"), /* @__PURE__ */ import_react.default.createElement("div", { className: `big-score ${riskClass}` }, score), /* @__PURE__ */ import_react.default.createElement("div", { className: "badge-container" }, /* @__PURE__ */ import_react.default.createElement("span", { className: `badge ${badgeClass}` }, riskLabel)))), /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-body" }, showSettings ? /* @__PURE__ */ import_react.default.createElement(SettingsPanel, { onBack: () => setShowSettings(false) }) : /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title" }, "Score breakdown"), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Screen time", value: scoreData?.breakdown.screenTimeScore || 0, color: "var(--amber-text)" }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Distance", value: scoreData?.breakdown.distanceScore || 0, color: "var(--green-text)" }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Blink rate", value: scoreData?.breakdown.blinkScore || 0, color: "var(--red-text)" }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Lighting", value: scoreData?.breakdown.lightingScore || 0, color: "var(--green-text)" }), /* @__PURE__ */ import_react.default.createElement("div", { className: "live-stats" }, /* @__PURE__ */ import_react.default.createElement("span", null, "\u23F1\uFE0F ", formatTime(liveStats.durationMs)), /* @__PURE__ */ import_react.default.createElement("span", null, "\u{1F440} ", liveStats.blinkRate, " bpm"), /* @__PURE__ */ import_react.default.createElement("span", null, "\u{1F4CF} ", liveStats.distanceCm, "cm")), liveStats.alerts.length > 0 && /* @__PURE__ */ import_react.default.createElement("div", { className: "live-alert-banner" }, "\u26A0\uFE0F ", liveStats.alerts[liveStats.alerts.length - 1].message.split(" \u2014 ")[0]), /* @__PURE__ */ import_react.default.createElement("div", { className: "divider" }), /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title" }, "Digital correction"), /* @__PURE__ */ import_react.default.createElement("div", { className: "preset-row" }, ["off", "office", "night"].map((p) => /* @__PURE__ */ import_react.default.createElement("div", { key: p, className: `preset-btn ${activePreset === p ? "on" : ""}`, onClick: () => setPreset(p) }, p.charAt(0).toUpperCase() + p.slice(1)))), /* @__PURE__ */ import_react.default.createElement("button", { className: "view-btn", onClick: () => chrome.tabs.create({ url: "/dist/dashboard/index.html" }) }, "View full dashboard"))));
       }
       function ProgressItem({ label, value, color }) {
         return /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-row" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "bar-label" }, label), /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-track" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-fill", style: { width: `${value / 25 * 100}%`, background: color } })), /* @__PURE__ */ import_react.default.createElement("span", { className: "bar-pts" }, Math.round(value)));

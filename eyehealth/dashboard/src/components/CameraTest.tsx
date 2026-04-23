@@ -100,39 +100,42 @@ function CameraTest() {
 
   const [displayStats, setDisplayStats] = useState<LiveStats | null>(null);
 
-  const liveStats = useLiveQuery(
-    () => db.table('live_stats').get(1).catch(() => null),
-    []
-  ) as LiveStats | null;
-
-  // ---------------- DISPLAY THROTTLING ----------------
+  // 1. Initial load from DB
   useEffect(() => {
-    if (!liveStats) return;
+    db.table('live_stats').get(1).then(stats => {
+      if (stats) setDisplayStats(stats);
+    });
+  }, []);
 
-    const now = Date.now();
-    if (now - lastDisplayUpdateRef.current > 500) {
-      setDisplayStats(liveStats);
-      lastDisplayUpdateRef.current = now;
-    }
-  }, [liveStats]);
+  // 2. Real-time stream via messaging
+  useEffect(() => {
+    const listener = (message: any) => {
+      if (message.type === 'LIVE_STATS_UPDATE') {
+        setDisplayStats(message.payload);
+      }
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, []);
 
   // ---------------- LANDMARKS SYNC ----------------
   useEffect(() => {
-    if (liveStats?.landmarks) {
-      lastLandmarksRef.current = liveStats.landmarks;
+    const landmarks = displayStats?.landmarks;
+    if (landmarks && landmarks.length > 0) {
+      lastLandmarksRef.current = landmarks;
       if (Date.now() - logFlags.current.lastLandmarkLog > 2000) {
-        console.log(`[LANDMARKS] Received: exists=true, points=${liveStats.landmarks.length}`);
+        console.log(`[LANDMARKS] Received: exists=true, points=${landmarks.length}`);
         logFlags.current.lastLandmarkLog = Date.now();
       }
-    } else if (liveStats && Date.now() - logFlags.current.lastLandmarkLog > 2000) {
-      console.log('[LANDMARKS] No landmarks in liveStats');
+    } else if (displayStats && Date.now() - logFlags.current.lastLandmarkLog > 2000) {
+      console.warn("No landmarks received from LIVE_STATS_UPDATE (using last known)");
       logFlags.current.lastLandmarkLog = Date.now();
     }
-  }, [liveStats]);
+  }, [displayStats]);
 
   // ---------------- FPS TRACKING ----------------
   useEffect(() => {
-    if (!liveStats) return;
+    if (!displayStats) return;
 
     fpsCountRef.current++;
     const now = Date.now();
@@ -143,7 +146,7 @@ function CameraTest() {
       fpsCountRef.current = 0;
       lastFpsReset.current = now;
     }
-  }, [liveStats?.updatedAt]);
+  }, [displayStats?.updatedAt]);
 
   // ---------------- DRAW LOOP ----------------
   useEffect(() => {
@@ -157,21 +160,18 @@ function CameraTest() {
           logFlags.current.videoReady = true;
         }
 
-        const w = video.videoWidth || canvas.width;
-        const h = video.videoHeight || canvas.height;
+        // Sync canvas internal resolution to video source resolution
+        const w = video.videoWidth;
+        const h = video.videoHeight;
 
-        if (canvas.width !== w) canvas.width = w;
-        if (canvas.height !== h) canvas.height = h;
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
+        }
 
         const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          console.error('[DRAW] Canvas context is null');
-        } else {
+        if (ctx) {
           if (lastLandmarksRef.current) {
-            if (Date.now() - logFlags.current.lastDrawLog > 3000) {
-              console.log('[DRAW] Executing drawLandmarks on canvas');
-              logFlags.current.lastDrawLog = Date.now();
-            }
             drawLandmarks(ctx, lastLandmarksRef.current, w, h);
           } else {
             ctx.clearRect(0, 0, w, h);
@@ -304,33 +304,62 @@ function CameraTest() {
         </div>
       </div>
 
-      <div style={{ width: '100%', height: '80px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ 
+        width: '100%', 
+        background: 'var(--bg-secondary)', 
+        borderRadius: 'var(--radius-md)', 
+        position: 'relative', 
+        overflow: 'hidden',
+        aspectRatio: '4/3',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
         <video 
           ref={videoRef} 
           id="eyeguard-video" 
           autoPlay 
           muted 
           playsInline 
-          style={{ display: 'none' }} 
+          style={{ 
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: camStatus === 'on' ? 'block' : 'none'
+          }} 
         />
+        <canvas
+          ref={canvasRef}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none',
+            zIndex: 10
+          }}
+        />
+        
+        {/* Simple status overlay when camera is starting or off */}
+        {camStatus !== 'on' && (
+          <div style={{ position: 'absolute', color: 'var(--text-tertiary)', fontSize: '12px', fontWeight: 600 }}>
+            {camStatus === 'starting' ? 'Initializing Camera...' : 'Camera Feed Inactive'}
+          </div>
+        )}
+
+        {/* Keeping existing distance indicators as a minimal overlay */}
         <div style={{ 
-          width: '40px', height: '40px', borderRadius: '50%', border: '2px solid var(--blue-text)', 
-          position: 'absolute', top: '50%', left: `${faceLeftPct}%`, transform: 'translateY(-50%)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'left 0.5s ease-out'
+          width: '24px', height: '24px', borderRadius: '50%', border: '2px solid var(--blue-text)', 
+          position: 'absolute', bottom: '16px', left: `${faceLeftPct}%`, transform: 'translateX(-50%)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'left 0.5s ease-out',
+          zIndex: 20, background: 'rgba(255,255,255,0.8)'
         }}>
-          <svg width="20" height="16" viewBox="0 0 20 16" fill="none">
+          <svg width="12" height="10" viewBox="0 0 20 16" fill="none">
             <circle cx="6" cy="8" r="3" stroke="var(--blue-text)" strokeWidth="1.2"/>
             <circle cx="14" cy="8" r="3" stroke="var(--blue-text)" strokeWidth="1.2"/>
-            <circle cx="6" cy="8" r="1" fill="var(--blue-text)" />
-            <circle cx="14" cy="8" r="1" fill="var(--blue-text)" />
           </svg>
         </div>
-        <div style={{ 
-          height: '2px', background: distanceCm < 50 ? 'var(--red-text)' : 'var(--green-text)', 
-          position: 'absolute', top: '50%', transform: 'translateY(-50%)', right: '12%',
-          width: `${lineWidthPct}%`, transition: 'width 0.5s ease-out, background 0.3s ease'
-        }}></div>
-        <div style={{ width: '28px', height: '22px', background: 'var(--border)', borderRadius: '3px', position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }}></div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
