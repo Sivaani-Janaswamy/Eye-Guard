@@ -229,7 +229,7 @@ function evaluateAlerts(stats: any): any[] {
   if (stats.faceDetected && stats.distanceCm < 50 && (now - lastAlertTimes.DISTANCE > 10000)) {
     alerts.push({
       type: 'DISTANCE',
-      message: 'Postural Alert — You are too close to the screen. Please move back.',
+      message: "You're too close to the screen - Move back to reduce eye strain",
       severity: 'warning'
     });
     lastAlertTimes.DISTANCE = now;
@@ -239,7 +239,7 @@ function evaluateAlerts(stats: any): any[] {
   if (stats.faceDetected && stats.blinkRate < 12 && (now - lastAlertTimes.BLINK > 180000)) {
     alerts.push({
       type: 'BLINK',
-      message: 'Blink Reminder — Your blink rate is low. Try to blink more to prevent dry eyes.',
+      message: 'Low blink rate detected - Blink more to prevent dry eyes',
       severity: 'info'
     });
     lastAlertTimes.BLINK = now;
@@ -249,7 +249,7 @@ function evaluateAlerts(stats: any): any[] {
   if (stats.lux < 50 && (now - lastAlertTimes.LIGHT > 300000)) {
     alerts.push({
       type: 'LIGHT',
-      message: 'Low Light — The room is too dark. Increasing ambient light reduces eye strain.',
+      message: 'Lighting is too dim - Increase ambient light to reduce eye strain',
       severity: 'warning'
     });
     lastAlertTimes.LIGHT = now;
@@ -259,7 +259,7 @@ function evaluateAlerts(stats: any): any[] {
   if (stats.durationMs - last2020Trigger >= 1200000 && (now - lastAlertTimes.USAGE > 60000)) {
     alerts.push({
       type: 'USAGE',
-      message: '20-20-20 Rule — Time for a break! Look 20 feet away for 20 seconds.',
+      message: '20-20-20 Rule - Time for a break! Look 20 feet away for 20 seconds',
       severity: 'info'
     });
     lastAlertTimes.USAGE = now;

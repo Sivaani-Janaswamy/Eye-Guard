@@ -8,6 +8,8 @@ let hudPos = { top: 20, left: 20 };
 let currentTheme: 'light' | 'dark' = 'light';
 let websiteStyleElement: HTMLStyleElement | null = null;
 let lastDistance: number = -1;
+let lastBlinkRate: number = 0;
+let lastLux: number = 0;
 let activeAlert: AlertEvent | null = null;
 let keepaliveInterval: any = null;
 let hudVisible: boolean = false;
@@ -35,152 +37,183 @@ function ensureStylesInjected() {
       --eg-red-bg: #FCEBEB;
       --eg-amber: #EF9F27;
       --eg-amber-bg: #FAEEDA;
+      --eg-green: #22c55e;
+      --eg-green-bg: #f0fdf4;
     }
 
     .eg-unified-toast {
       position: fixed;
       z-index: 2147483647;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease, background-color 0.3s ease;
+      transition: all 0.25s ease;
       user-select: none;
       box-sizing: border-box;
+      
+      /* Expanded state styling */
+      width: 320px;
+      background: var(--eg-bg-primary);
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.15), 0 2px 10px rgba(0,0,0,0.1);
+      border: 1px solid var(--eg-border);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    /* Alert-specific color variants */
+    .eg-unified-toast.warning {
+      border-color: var(--eg-amber);
+      border-left: 4px solid var(--eg-amber);
+    }
+    
+    .eg-unified-toast.critical {
+      border-color: var(--eg-red);
+      border-left: 4px solid var(--eg-red);
+    }
+    
+    .eg-unified-toast.good {
+      border-color: var(--eg-green);
+      border-left: 4px solid var(--eg-green);
+    }
+
+    .eg-unified-toast.positive {
+      border-color: var(--eg-green);
+      border-left: 4px solid var(--eg-green);
+    }
+    
+    .eg-unified-toast.normal {
+      border-color: var(--eg-blue);
+      border-left: 4px solid var(--eg-blue);
     }
 
     .eg-toast-expanded {
-      width: 280px;
-      background: var(--eg-bg-primary);
-      border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.12);
-      border: 1px solid var(--eg-border);
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      /* No longer needed - styling moved to .eg-unified-toast */
     }
 
-    .eg-toast-header {
+    .eg-toast-content {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
+      flex: 1;
+      min-width: 0;
     }
 
     .eg-eye-container {
-      width: 32px;
-      height: 32px;
-      background: var(--eg-blue-bg);
-      border-radius: 8px;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      transition: all 0.25s ease;
     }
 
+    .eg-eye-container.info { background: var(--eg-blue-bg); }
+    .eg-eye-container.warning { background: var(--eg-amber-bg); }
+    .eg-eye-container.critical { background: var(--eg-red-bg); }
+    .eg-eye-container.good { background: var(--eg-green-bg); }
+    .eg-eye-container.positive { background: var(--eg-green-bg); }
+    .eg-eye-container.normal { background: var(--eg-blue-bg); }
+
     .eg-eye-img {
-      width: 20px;
-      height: 20px;
+      width: 24px;
+      height: 24px;
       object-fit: contain;
     }
 
-    .eg-stats-container {
+    .eg-text-content {
       flex: 1;
-      display: flex;
-      flex-direction: column;
+      min-width: 0;
     }
 
-    .eg-dist-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      font-weight: 700;
-      color: var(--eg-text-s);
-      letter-spacing: 0.5px;
-    }
-
-    .eg-dist-value {
-      font-size: 16px;
-      font-weight: 700;
+    .eg-title {
+      font-size: 14px;
+      font-weight: 600;
       color: var(--eg-text-p);
+      margin-bottom: 2px;
+      line-height: 1.2;
+    }
+
+    .eg-message {
+      font-size: 12px;
+      color: var(--eg-text-s);
+      line-height: 1.4;
+      word-wrap: break-word;
+    }
+
+    .eg-distance {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--eg-text-p);
+      margin-top: 2px;
+      line-height: 1.2;
+    }
+
+    .eg-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
     }
 
     .eg-minimize-btn {
-      width: 24px;
-      height: 24px;
-      border-radius: 6px;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
       border: none;
       background: var(--eg-bg-secondary);
       color: var(--eg-text-s);
-      font-size: 18px;
-      font-weight: 700;
+      font-size: 16px;
+      font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.2s;
+      transition: all 0.2s ease;
     }
 
     .eg-minimize-btn:hover {
       background: #e5e4e0;
       color: var(--eg-text-p);
+      transform: scale(1.05);
     }
 
-    .eg-alert-container {
-      background: var(--eg-blue-bg);
-      border-radius: 8px;
-      padding: 8px 10px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      border-left: 3px solid var(--eg-blue);
+    .eg-unified-toast:only-child img {
+      width: 32px;
+      height: 32px;
     }
 
-    .eg-alert-container.warning {
-      background: var(--eg-amber-bg);
-      border-left-color: var(--eg-amber);
-    }
-
-    .eg-alert-container.critical {
-      background: var(--eg-red-bg);
-      border-left-color: var(--eg-red);
-    }
-
-    .eg-alert-text {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--eg-text-p);
-      line-height: 1.3;
-    }
-
-    .eg-toast-minimized {
-      width: 48px;
-      height: 48px;
-      background: var(--eg-bg-primary);
+    /* Minimized state - when only img is present */
+    .eg-unified-toast:has(> img:only-child) {
+      width: 56px;
+      height: 56px;
       border-radius: 50%;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.15);
       border: 2px solid var(--eg-blue);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       overflow: hidden;
+      padding: 0;
+      gap: 0;
     }
 
-    .eg-toast-minimized:hover {
+    .eg-unified-toast:has(> img:only-child):hover {
       transform: scale(1.1);
-    }
-
-    .eg-toast-minimized img {
-      width: 26px;
-      height: 26px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
     }
 
     /* Dark Mode Overrides */
-    .eg-dark-mode .eg-toast-expanded,
-    .eg-dark-mode .eg-toast-minimized {
+    .eg-dark-mode {
       background: #1e1e1e;
       border-color: #333;
       color: #f0f0f0;
     }
-    .eg-dark-mode .eg-dist-value,
-    .eg-dark-mode .eg-alert-text {
+    .eg-dark-mode .eg-title,
+    .eg-dark-mode .eg-message,
+    .eg-dark-mode .eg-distance {
       color: #f0f0f0;
     }
     .eg-dark-mode .eg-bg-secondary {
@@ -234,6 +267,36 @@ function makeDraggable(el: HTMLElement) {
   }
 }
 
+// -------------------- HEALTH STATUS CALCULATION --------------------
+function calculateHealthStatus(): { status: 'positive' | 'normal' | 'warning' | 'critical', message?: string } {
+  // Critical state check
+  if (activeAlert?.severity === 'critical') {
+    return { status: 'critical', message: activeAlert.message };
+  }
+
+  // Get current metrics
+  const distance = lastDistance;
+  const blinkRate = lastBlinkRate || 0;
+  const lux = lastLux || 0;
+
+  // Check for positive state (all metrics optimal)
+  const isDistanceOptimal = distance >= 50 && distance <= 70;
+  const isBlinkRateOptimal = blinkRate >= 15 && blinkRate <= 20;
+  const isLightingOptimal = lux >= 200 && lux <= 500;
+
+  if (isDistanceOptimal && isBlinkRateOptimal && isLightingOptimal) {
+    return { status: 'positive', message: 'Great posture! Your eyes are healthy' };
+  }
+
+  // Check for warning state (any suboptimal metric)
+  if (distance < 50 || blinkRate < 15 || lux < 200 || activeAlert?.severity === 'warning') {
+    return { status: 'warning', message: activeAlert?.message };
+  }
+
+  // Normal state (no alerts, not all optimal)
+  return { status: 'normal' };
+}
+
 function renderUnifiedToast() {
   if (!hudVisible) {
     if (unifiedToastElement) {
@@ -271,13 +334,13 @@ function renderUnifiedToast() {
 function renderMinimizedState() {
   if (!unifiedToastElement) return;
   
+  // Apply info class for minimized state
+  unifiedToastElement.className = 'eg-unified-toast';
+  
   unifiedToastElement.innerHTML = `
-    <div class="eg-toast-minimized">
-      <img src="${chrome.runtime.getURL('assets/eye.png')}" alt="EyeGuard" />
-    </div>
+    <img src="${chrome.runtime.getURL('assets/eye.png')}" alt="EyeGuard" />
   `;
   
-  unifiedToastElement.classList.remove('eg-toast-expanded');
   unifiedToastElement.style.cursor = 'pointer';
   unifiedToastElement.onclick = (e) => {
     // Only toggle if we didn't just drag
@@ -291,29 +354,37 @@ function renderExpandedState() {
   if (!unifiedToastElement) return;
 
   const distText = lastDistance > 0 ? `${Math.round(lastDistance)}cm` : 'Measuring...';
-  const alertHtml = activeAlert ? `
-    <div class="eg-alert-container ${activeAlert.severity}">
-      <div class="eg-alert-text">${activeAlert.message.split(' — ')[0]}</div>
-    </div>
-  ` : '';
+  const healthStatus = calculateHealthStatus();
+  const alertType = healthStatus.status;
+  const title = healthStatus.status === 'positive' ? 'EyeGuard' : 
+                  healthStatus.status === 'normal' ? 'EyeGuard' :
+                  'EyeGuard Alert';
+  const alertMessage = healthStatus.message || '';
+  
+  // Clear alert if it's older than 10 seconds
+  if (activeAlert && Date.now() - activeAlert.triggeredAt > 10000) {
+    activeAlert = null;
+  }
+
+  // Apply health status class to unified toast element
+  unifiedToastElement.className = `eg-unified-toast ${alertType}`;
 
   unifiedToastElement.innerHTML = `
-    <div class="eg-toast-expanded">
-      <div class="eg-toast-header">
-        <div class="eg-eye-container">
-          <img src="${chrome.runtime.getURL('assets/eye.png')}" class="eg-eye-img" />
-        </div>
-        <div class="eg-stats-container">
-          <div class="eg-dist-label">Distance</div>
-          <div class="eg-dist-value">${distText}</div>
-        </div>
-        <button class="eg-minimize-btn" title="Minimize">−</button>
+    <div class="eg-toast-content">
+      <div class="eg-eye-container ${alertType}">
+        <img src="${chrome.runtime.getURL('assets/eye.png')}" class="eg-eye-img" />
       </div>
-      ${alertHtml}
+      <div class="eg-text-content">
+        <div class="eg-title">${title}</div>
+        ${alertMessage ? `<div class="eg-message">${alertMessage}</div>` : ''}
+        <div class="eg-distance">${distText}</div>
+      </div>
+    </div>
+    <div class="eg-actions">
+      <button class="eg-minimize-btn" title="Minimize">−</button>
     </div>
   `;
 
-  unifiedToastElement.classList.add('eg-toast-expanded');
   unifiedToastElement.style.cursor = 'default';
   unifiedToastElement.onclick = null;
 
@@ -438,7 +509,7 @@ async function startMonitoring() {
       triggeredAt: Date.now(),
       dismissed: false,
       snoozedUntil: null,
-      message: 'Camera Access Denied — Please allow camera to use EyeGuard',
+      message: 'Camera access denied - Please allow camera to use EyeGuard',
       actionTaken: null
     };
     renderUnifiedToast();
@@ -544,6 +615,10 @@ window.addEventListener('message', (event) => {
   } else {
     lastDistance = -1;
   }
+  
+  // Store real-time metrics for health status calculation
+  lastBlinkRate = frameData.blinkRate || 0;
+  lastLux = frameData.ambientLuxLevel || 0;
   
   // Throttle re-renders for stats
   if (!isMinimized && hudVisible) {

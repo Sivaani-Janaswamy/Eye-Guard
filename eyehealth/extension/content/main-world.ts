@@ -34,7 +34,7 @@ let cameraActive = false;
   // Constants
   const IPD_CM = 6.3;
   const APPROX_FOCAL = 600;
-  const EAR_THRESHOLD = 0.21;
+  const EAR_THRESHOLD = 0.18;
 
   function computeAmbientLux(): number {
     if (!videoElement || !lightingCtx || videoElement.readyState < 2) return Math.round(smoothedLux || lastLux);
@@ -105,12 +105,20 @@ let cameraActive = false;
 
       if (faceCount === 0) {
         const lux = computeAmbientLux();
+        
+        // Continue blink counting even when face is temporarily lost
+        // Clean old timestamps from rolling window
+        while (blinkTimestamps.length && now - blinkTimestamps[0] > 60000) {
+          blinkTimestamps.shift();
+        }
+        const currentBlinkRate = blinkTimestamps.length;
+        
         window.postMessage({
           type: 'EYEGUARD_FRAME',
           payload: {
             faceDetected: false,
             screenDistanceCm: -1,
-            blinkRate: 0,
+            blinkRate: currentBlinkRate, // Don't reset to 0
             ambientLuxLevel: lux,
             isLowLight: lux < 50,
             confidence: 0,
@@ -173,7 +181,14 @@ let cameraActive = false;
 
       // Logging
       if (self._egFrameCount % 90 === 0) {
-        console.log(`[DATA] values computed | dist: ${Math.round(distanceCm)}cm | blinkRate: ${blinkRate} | EAR: ${smoothEAR.toFixed(3)}`);
+        console.log(`[DATA] values computed | dist: ${Math.round(distanceCm)}cm | blinkRate: ${blinkRate} | EAR: ${smoothEAR.toFixed(3)} | isBlinking: ${isBlinking}`);
+      }
+      
+      // Log blink detection events
+      if (smoothEAR < EAR_THRESHOLD && !isBlinking) {
+        console.log(`[BLINK] Detected! EAR: ${smoothEAR.toFixed(3)} < ${EAR_THRESHOLD}, timestamps: ${blinkTimestamps.length}`);
+      } else if (smoothEAR > EAR_THRESHOLD && isBlinking) {
+        console.log(`[BLINK] Ended. EAR: ${smoothEAR.toFixed(3)} > ${EAR_THRESHOLD}`);
       }
 
       const lux = computeAmbientLux();
