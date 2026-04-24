@@ -10,7 +10,7 @@ import { CorrectionPanel } from '../components/CorrectionPanel';
 import CameraTest from '../components/CameraTest';
 
 export default function Dashboard() {
-  // VERSION: 2026-04-24
+  // VERSION: 2026-04-24-toast-fixes
   const [isDemoData, setIsDemoData] = useState(false);
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
 
