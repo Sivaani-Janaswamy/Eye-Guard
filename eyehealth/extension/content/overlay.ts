@@ -13,6 +13,62 @@ let lastLux: number = 0;
 let activeAlert: AlertEvent | null = null;
 let keepaliveInterval: any = null;
 let hudVisible: boolean = false;
+let lastToastRender: number = 0;
+const TOAST_THROTTLE_MS = 500; // Throttle toast re-renders to every 500ms
+let isDragging = false; // Track drag state to prevent click events during drag
+let isRendering = false; // Prevent overlapping render calls
+let dragCleanup: (() => void) | null = null; // Store cleanup function for drag listeners
+let keyboardCleanup: (() => void) | null = null; // Store cleanup function for keyboard listeners
+
+// -------------------- SAFETY UTILITIES --------------------
+function safeSetHTML(element: HTMLElement, html: string): void {
+  try {
+    element.innerHTML = html;
+  } catch (error) {
+    console.error('[EyeGuard] Toast render failed:', error);
+    // Fallback UI that never fails
+    element.innerHTML = `
+      <div style="padding: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="font-weight: 600; color: #1a1a18; margin-bottom: 4px;">EyeGuard</div>
+        <div style="font-size: 12px; color: #666;">System monitoring active</div>
+      </div>
+    `;
+  }
+}
+
+function getSafeEyeIcon(): string {
+  const eyeIcon = chrome.runtime.getURL('assets/eye.png');
+  // Prevent infinite onerror loops with unique ID
+  const fallbackId = 'eg-eye-fallback';
+  return `<img src="${eyeIcon}" alt="EyeGuard" onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', '<span style=\\"font-size: 24px;\\">👁️</span>');" />`;
+}
+
+function setupKeyboardNavigation(element: HTMLElement): () => void {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    switch (e.key) {
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        // Toggle minimize/maximize state
+        isMinimized = !isMinimized;
+        renderUnifiedToast();
+        break;
+      case 'Escape':
+        e.preventDefault();
+        // Hide toast completely
+        hudVisible = false;
+        renderUnifiedToast();
+        break;
+    }
+  };
+
+  element.addEventListener('keydown', handleKeyDown);
+  
+  // Return cleanup function
+  return () => {
+    element.removeEventListener('keydown', handleKeyDown);
+  };
+}
 
 // Camera management
 let monitoringStream: MediaStream | null = null;
@@ -185,8 +241,8 @@ function ensureStylesInjected() {
       height: 32px;
     }
 
-    /* Minimized state - when only img is present */
-    .eg-unified-toast:has(> img:only-child) {
+    /* Minimized state - class-based approach for Firefox compatibility */
+    .eg-unified-toast.minimized {
       width: 56px;
       height: 56px;
       border-radius: 50%;
@@ -198,11 +254,17 @@ function ensureStylesInjected() {
       overflow: hidden;
       padding: 0;
       gap: 0;
+      background: var(--eg-bg-primary);
     }
 
-    .eg-unified-toast:has(> img:only-child):hover {
+    .eg-unified-toast.minimized:hover {
       transform: scale(1.1);
       box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    }
+
+    .eg-unified-toast.minimized img {
+      width: 32px;
+      height: 32px;
     }
 
     /* Dark Mode Overrides */
@@ -226,7 +288,7 @@ function ensureStylesInjected() {
 function makeDraggable(el: HTMLElement) {
   let offsetX = 0, offsetY = 0;
 
-  el.onmousedown = (e: MouseEvent) => {
+  const startDrag = (e: MouseEvent) => {
     // Prevent dragging when clicking the minimize button
     if ((e.target as HTMLElement).closest('.eg-minimize-btn')) return;
     
@@ -236,38 +298,88 @@ function makeDraggable(el: HTMLElement) {
     offsetX = e.clientX - rect.left;
     offsetY = e.clientY - rect.top;
     
-    document.onmousemove = elementDrag;
-    document.onmouseup = closeDragElement;
-    
+    isDragging = true; // Start drag state
     el.style.transition = "none";
     el.style.cursor = "grabbing";
+
+    // Use proper event listeners with cleanup tracking
+    const elementDrag = (e: MouseEvent) => {
+      e.preventDefault();
+      let newX = e.clientX - offsetX;
+      let newY = e.clientY - offsetY;
+      
+      const padding = 10;
+      newX = Math.max(padding, Math.min(newX, window.innerWidth - el.offsetWidth - padding));
+      newY = Math.max(padding, Math.min(newY, window.innerHeight - el.offsetHeight - padding));
+      
+      hudPos.top = newY;
+      hudPos.left = newX;
+      
+      el.style.top = `${newY}px`;
+      el.style.left = `${newX}px`;
+    };
+
+    const closeDragElement = () => {
+      // Clean up event listeners
+      document.removeEventListener('mousemove', elementDrag);
+      document.removeEventListener('mouseup', closeDragElement);
+      dragCleanup = null;
+      
+      el.style.transition = "transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease, background-color 0.3s ease";
+      el.style.cursor = isMinimized ? "pointer" : "default";
+      
+      // Reset drag state after a small delay to prevent click event
+      setTimeout(() => {
+        isDragging = false;
+      }, 10);
+    };
+
+    // Add event listeners and store cleanup function
+    document.addEventListener('mousemove', elementDrag);
+    document.addEventListener('mouseup', closeDragElement);
+    dragCleanup = () => {
+      document.removeEventListener('mousemove', elementDrag);
+      document.removeEventListener('mouseup', closeDragElement);
+    };
   };
 
-  function elementDrag(e: MouseEvent) {
-    e.preventDefault();
-    let newX = e.clientX - offsetX;
-    let newY = e.clientY - offsetY;
-    
-    const padding = 10;
-    newX = Math.max(padding, Math.min(newX, window.innerWidth - el.offsetWidth - padding));
-    newY = Math.max(padding, Math.min(newY, window.innerHeight - el.offsetHeight - padding));
-    
-    hudPos.top = newY;
-    hudPos.left = newX;
-    
-    el.style.top = `${newY}px`;
-    el.style.left = `${newX}px`;
-  }
-
-  function closeDragElement() {
-    document.onmousemove = null;
-    document.onmouseup = null;
-    el.style.transition = "transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease, background-color 0.3s ease";
-    el.style.cursor = isMinimized ? "pointer" : "default";
-  }
+  el.addEventListener('mousedown', startDrag);
+  
+  // Return cleanup function for the mousedown listener
+  return () => {
+    el.removeEventListener('mousedown', startDrag);
+    if (dragCleanup) {
+      dragCleanup();
+      dragCleanup = null;
+    }
+  };
 }
 
 // -------------------- HEALTH STATUS CALCULATION --------------------
+function generateOptimizationSuggestions(distance: number, blinkRate: number, lux: number): string[] {
+  const suggestions = [];
+  
+  if (distance > 0 && distance < 50) {
+    suggestions.push("Move back to 50-70cm from screen");
+  } else if (distance > 70) {
+    suggestions.push("Move closer to 50-70cm from screen");
+  }
+  
+  if (blinkRate > 0 && blinkRate < 15) {
+    suggestions.push("Blink more - aim for 15-20 blinks/min");
+  } else if (blinkRate > 20) {
+    suggestions.push("Reduce blinking - aim for 15-20 blinks/min");
+  }
+  
+  if (lux > 0 && lux < 200) {
+    suggestions.push("Increase lighting to 200-500 lux");
+  } else if (lux > 500) {
+    suggestions.push("Reduce lighting to 200-500 lux");
+  }
+  
+  return suggestions;
+}
+
 function calculateHealthStatus(): { status: 'positive' | 'normal' | 'warning' | 'critical', message?: string } {
   // Critical state check
   if (activeAlert?.severity === 'critical') {
@@ -288,46 +400,91 @@ function calculateHealthStatus(): { status: 'positive' | 'normal' | 'warning' | 
     return { status: 'positive', message: 'Great posture! Your eyes are healthy' };
   }
 
-  // Check for warning state (any suboptimal metric)
-  if (distance < 50 || blinkRate < 15 || lux < 200 || activeAlert?.severity === 'warning') {
-    return { status: 'warning', message: activeAlert?.message };
+  // NEW: Warning with specific suggestions for non-optimal metrics
+  const suggestions = generateOptimizationSuggestions(distance, blinkRate, lux);
+  if (suggestions.length > 0) {
+    return { 
+      status: 'warning', 
+      message: `To optimize: ${suggestions.join(', ')}` 
+    };
   }
 
-  // Normal state (no alerts, not all optimal)
+  // Check for active alerts (fallback)
+  if (activeAlert?.severity === 'warning') {
+    return { status: 'warning', message: activeAlert.message };
+  }
+
+  // Normal state (no specific issues, but not all optimal)
   return { status: 'normal' };
 }
 
 function renderUnifiedToast() {
-  if (!hudVisible) {
-    if (unifiedToastElement) {
-      unifiedToastElement.remove();
-      unifiedToastElement = null;
+  // Prevent overlapping render calls
+  if (isRendering) return;
+  isRendering = true;
+
+  try {
+    const now = Date.now();
+    if (now - lastToastRender < TOAST_THROTTLE_MS) {
+      return; // Skip this render - too soon since last one
     }
-    return;
-  }
+    lastToastRender = now;
 
-  ensureStylesInjected();
+    if (!hudVisible) {
+      if (unifiedToastElement) {
+        // Clean up all event listeners before removal
+        if (dragCleanup) {
+          dragCleanup();
+          dragCleanup = null;
+        }
+        if (keyboardCleanup) {
+          keyboardCleanup();
+          keyboardCleanup = null;
+        }
+        unifiedToastElement.remove();
+        unifiedToastElement = null;
+      }
+      return;
+    }
 
-  if (!unifiedToastElement) {
-    unifiedToastElement = document.createElement('div');
-    unifiedToastElement.className = 'eg-unified-toast';
-    document.body.appendChild(unifiedToastElement);
-    makeDraggable(unifiedToastElement);
-  }
+    ensureStylesInjected();
 
-  unifiedToastElement.style.top = `${hudPos.top}px`;
-  unifiedToastElement.style.left = `${hudPos.left}px`;
-  
-  if (currentTheme === 'dark') {
-    unifiedToastElement.classList.add('eg-dark-mode');
-  } else {
-    unifiedToastElement.classList.remove('eg-dark-mode');
-  }
+    if (!unifiedToastElement) {
+      unifiedToastElement = document.createElement('div');
+      unifiedToastElement.className = 'eg-unified-toast';
+      
+      // Accessibility attributes
+      unifiedToastElement.setAttribute('role', 'alert');
+      unifiedToastElement.setAttribute('aria-live', 'polite');
+      unifiedToastElement.setAttribute('aria-atomic', 'true');
+      unifiedToastElement.setAttribute('tabindex', '0');
+      unifiedToastElement.setAttribute('aria-label', 'EyeGuard vision health monitor');
+      
+      document.body.appendChild(unifiedToastElement);
+      
+      // Store cleanup function for draggable listeners
+      dragCleanup = makeDraggable(unifiedToastElement);
+      
+      // Add keyboard navigation
+      keyboardCleanup = setupKeyboardNavigation(unifiedToastElement);
+    }
 
-  if (isMinimized) {
-    renderMinimizedState();
-  } else {
-    renderExpandedState();
+    unifiedToastElement.style.top = `${hudPos.top}px`;
+    unifiedToastElement.style.left = `${hudPos.left}px`;
+    
+    if (currentTheme === 'dark') {
+      unifiedToastElement.classList.add('eg-dark-mode');
+    } else {
+      unifiedToastElement.classList.remove('eg-dark-mode');
+    }
+
+    if (isMinimized) {
+      renderMinimizedState();
+    } else {
+      renderExpandedState();
+    }
+  } finally {
+    isRendering = false;
   }
 }
 
@@ -335,16 +492,14 @@ function renderMinimizedState() {
   if (!unifiedToastElement) return;
   
   // Apply info class for minimized state
-  unifiedToastElement.className = 'eg-unified-toast';
+  unifiedToastElement.className = 'eg-unified-toast minimized';
   
-  unifiedToastElement.innerHTML = `
-    <img src="${chrome.runtime.getURL('assets/eye.png')}" alt="EyeGuard" />
-  `;
+  safeSetHTML(unifiedToastElement, getSafeEyeIcon());
   
   unifiedToastElement.style.cursor = 'pointer';
   unifiedToastElement.onclick = (e) => {
     // Only toggle if we didn't just drag
-    if (unifiedToastElement?.style.cursor === 'grabbing') return;
+    if (isDragging) return;
     isMinimized = false;
     renderUnifiedToast();
   };
@@ -369,10 +524,10 @@ function renderExpandedState() {
   // Apply health status class to unified toast element
   unifiedToastElement.className = `eg-unified-toast ${alertType}`;
 
-  unifiedToastElement.innerHTML = `
+  safeSetHTML(unifiedToastElement, `
     <div class="eg-toast-content">
       <div class="eg-eye-container ${alertType}">
-        <img src="${chrome.runtime.getURL('assets/eye.png')}" class="eg-eye-img" />
+        ${getSafeEyeIcon()}
       </div>
       <div class="eg-text-content">
         <div class="eg-title">${title}</div>
@@ -383,7 +538,7 @@ function renderExpandedState() {
     <div class="eg-actions">
       <button class="eg-minimize-btn" title="Minimize">−</button>
     </div>
-  `;
+  `);
 
   unifiedToastElement.style.cursor = 'default';
   unifiedToastElement.onclick = null;
@@ -620,9 +775,13 @@ window.addEventListener('message', (event) => {
   lastBlinkRate = frameData.blinkRate || 0;
   lastLux = frameData.ambientLuxLevel || 0;
   
-  // Throttle re-renders for stats
+  // Throttle re-renders for stats - only update distance text, not full toast
   if (!isMinimized && hudVisible) {
-    renderExpandedState();
+    const distText = lastDistance > 0 ? `${Math.round(lastDistance)}cm` : 'Measuring...';
+    const distanceElement = unifiedToastElement?.querySelector('.eg-distance');
+    if (distanceElement && distanceElement.textContent !== distText) {
+      distanceElement.textContent = distText;
+    }
   }
 
   chrome.runtime.sendMessage({
