@@ -27745,6 +27745,7 @@
         const [liveStats, setLiveStats] = (0, import_react.useState)({
           distanceCm: 0,
           blinkRate: 0,
+          lux: 0,
           faceDetected: false,
           durationMs: 0,
           alerts: []
@@ -27760,14 +27761,7 @@
             if (todayScoreArr.length > 0) {
               setScoreData(todayScoreArr[0]);
             } else {
-              setScoreData({
-                date: todayString,
-                score: 100,
-                breakdown: { screenTimeScore: 25, distanceScore: 25, blinkScore: 25, lightingScore: 25 },
-                riskLevel: "low",
-                myopiaRiskFlag: false,
-                totalScreenMinutes: 0
-              });
+              setScoreData(null);
             }
             const sessions = await db.sessions.orderBy("startTime").reverse().limit(1).toArray();
             if (sessions.length > 0 && sessions[0].endTime === null) {
@@ -27777,8 +27771,19 @@
             if (correctionProfileObj?.activePreset) {
               setActivePreset(correctionProfileObj.activePreset);
             }
-            const settings = await chrome.storage.local.get("theme");
+            const settings = await chrome.storage.local.get(["theme", "isMonitoring"]);
             if (settings.theme) setTheme(settings.theme);
+            if (settings.isMonitoring !== void 0) setIsMonitoring(settings.isMonitoring);
+            const lastLive = await db.live_stats.get(1);
+            if (lastLive) {
+              setLiveStats((prev) => ({
+                ...prev,
+                distanceCm: lastLive.distanceCm,
+                blinkRate: lastLive.blinkRate,
+                lux: lastLive.lux,
+                faceDetected: lastLive.faceDetected
+              }));
+            }
           };
           loadData();
         }, []);
@@ -27788,6 +27793,17 @@
           const secs = totalSeconds % 60;
           return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
         };
+        const formatHours = (mins) => {
+          const h = Math.floor(mins / 60);
+          const m = Math.round(mins % 60);
+          return `${h}h ${m}m`;
+        };
+        const getLuxLabel = (lux) => {
+          if (lux < 50) return "Very Dim";
+          if (lux < 150) return "Dim";
+          if (lux < 300) return "Good";
+          return "Bright";
+        };
         (0, import_react.useEffect)(() => {
           const listener = (message) => {
             if (message.type === "LIVE_STATS_UPDATE") {
@@ -27795,10 +27811,14 @@
               setLiveStats({
                 distanceCm: live.distanceCm,
                 blinkRate: live.blinkRate,
+                lux: live.lux,
                 faceDetected: live.faceDetected,
                 durationMs: live.durationMs || 0,
                 alerts: live.alerts || []
               });
+            }
+            if (message.type === "SCORE_UPDATE") {
+              setScoreData(message.payload.scoreData);
             }
           };
           chrome.runtime.onMessage.addListener(listener);
@@ -27812,6 +27832,7 @@
         const toggleMon = () => {
           const newVal = !isMonitoring;
           setIsMonitoring(newVal);
+          chrome.storage.local.set({ isMonitoring: newVal });
           chrome.runtime.sendMessage({ type: newVal ? "START_MONITORING" : "STOP_MONITORING" });
         };
         const setPreset = async (presetId) => {
@@ -27838,17 +27859,56 @@
         };
         if (hasConsent === null) return null;
         if (!hasConsent) return /* @__PURE__ */ import_react.default.createElement(ConsentScreen, { onAllow: handleGrantConsent });
-        const score = scoreData?.score || 100;
+        const totalDurationMs = scoreData?.totalDurationMs || 0;
+        const hasData = scoreData !== null && totalDurationMs > 5e3;
+        const score = scoreData?.score || 0;
         const riskClass = score >= 75 ? "score-green" : score >= 50 ? "score-amber" : "score-red";
         const badgeClass = score >= 75 ? "badge-green" : score >= 50 ? "badge-amber" : "badge-red";
         const riskLabel = score >= 75 ? "Low risk" : score >= 50 ? "Moderate risk" : "High risk";
-        return /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-popup" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-header" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-header-row" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-title" }, "EyeGuard"), /* @__PURE__ */ import_react.default.createElement("div", { className: "header-controls" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "theme-toggle", onClick: toggleTheme }, theme === "dark" ? "\u2600\uFE0F" : "\u{1F319}"), /* @__PURE__ */ import_react.default.createElement("span", { className: "settings-toggle", onClick: () => setShowSettings(!showSettings) }, "\u2699\uFE0F"), /* @__PURE__ */ import_react.default.createElement("span", { className: `mon-status ${isMonitoring ? "mon-on" : "mon-off"}` }, isMonitoring ? "Monitoring on" : "Monitoring off"), /* @__PURE__ */ import_react.default.createElement("div", { className: `toggle ${isMonitoring ? "on" : ""}`, onClick: toggleMon }, /* @__PURE__ */ import_react.default.createElement("div", { className: "toggle-thumb" })))), !showSettings && /* @__PURE__ */ import_react.default.createElement("div", { className: "score-section" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "score-label" }, "Today's eye score"), /* @__PURE__ */ import_react.default.createElement("div", { className: `big-score ${riskClass}` }, score), /* @__PURE__ */ import_react.default.createElement("div", { className: "badge-container" }, /* @__PURE__ */ import_react.default.createElement("span", { className: `badge ${badgeClass}` }, riskLabel)))), /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-body" }, showSettings ? /* @__PURE__ */ import_react.default.createElement(SettingsPanel, { onBack: () => setShowSettings(false) }) : /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title" }, "Score breakdown"), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Screen time", value: scoreData?.breakdown.screenTimeScore || 0, color: "var(--amber-text)" }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Distance", value: scoreData?.breakdown.distanceScore || 0, color: "var(--green-text)" }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Blink rate", value: scoreData?.breakdown.blinkScore || 0, color: "var(--red-text)" }), /* @__PURE__ */ import_react.default.createElement(ProgressItem, { label: "Lighting", value: scoreData?.breakdown.lightingScore || 0, color: "var(--green-text)" }), /* @__PURE__ */ import_react.default.createElement("div", { className: "live-stats" }, /* @__PURE__ */ import_react.default.createElement("span", null, "\u23F1\uFE0F ", formatTime(liveStats.durationMs)), /* @__PURE__ */ import_react.default.createElement("span", null, "\u{1F440} ", liveStats.blinkRate, " bpm"), /* @__PURE__ */ import_react.default.createElement("span", null, "\u{1F4CF} ", liveStats.distanceCm, "cm")), liveStats.alerts.length > 0 && /* @__PURE__ */ import_react.default.createElement("div", { className: "live-alert-banner" }, "\u26A0\uFE0F ", liveStats.alerts[liveStats.alerts.length - 1].message.split(" \u2014 ")[0]), /* @__PURE__ */ import_react.default.createElement("div", { className: "divider" }), /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title" }, "Digital correction"), /* @__PURE__ */ import_react.default.createElement("div", { className: "preset-row" }, ["off", "office", "night"].map((p) => /* @__PURE__ */ import_react.default.createElement("div", { key: p, className: `preset-btn ${activePreset === p ? "on" : ""}`, onClick: () => setPreset(p) }, p.charAt(0).toUpperCase() + p.slice(1)))), /* @__PURE__ */ import_react.default.createElement("button", { className: "view-btn", onClick: () => chrome.tabs.create({ url: "/dist/dashboard/index.html" }) }, "View full dashboard"))));
+        const bd = scoreData?.breakdown || { screenTimeScore: 0, distanceScore: 0, blinkScore: 0, lightingScore: 0 };
+        return /* @__PURE__ */ import_react.default.createElement("div", { className: `ext-popup ${theme === "dark" ? "dark-mode" : ""}` }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-header" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-header-row" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-title" }, "EyeGuard"), /* @__PURE__ */ import_react.default.createElement("div", { className: "header-controls" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "theme-toggle", onClick: toggleTheme, title: "Toggle Theme" }, theme === "dark" ? "\u2600\uFE0F" : "\u{1F319}"), /* @__PURE__ */ import_react.default.createElement("div", { className: "settings-toggle", onClick: () => setShowSettings(!showSettings), title: "Settings" }, "\u2699\uFE0F"), /* @__PURE__ */ import_react.default.createElement("div", { className: `mon-status ${isMonitoring ? "mon-on" : "mon-off"}` }, isMonitoring ? "Monitoring on" : "Monitoring off"), /* @__PURE__ */ import_react.default.createElement("div", { className: `toggle ${isMonitoring ? "on" : ""}`, onClick: toggleMon, title: "Toggle Monitoring" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "toggle-thumb" })))), !showSettings && /* @__PURE__ */ import_react.default.createElement("div", { className: "score-section" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "score-label" }, "Today's eye score"), hasData ? /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: `big-score ${riskClass}` }, score), /* @__PURE__ */ import_react.default.createElement("div", { className: "badge-container" }, /* @__PURE__ */ import_react.default.createElement("span", { className: `badge ${badgeClass}` }, riskLabel))) : /* @__PURE__ */ import_react.default.createElement("div", { className: "no-data-msg" }, !isMonitoring ? "Start monitoring to see your score." : totalDurationMs < 5e3 ? "Collecting data..." : "Collecting reliable data..."), hasData && totalDurationMs < 12e4 && /* @__PURE__ */ import_react.default.createElement("div", { className: "confidence-hint", style: { fontSize: "10px", color: "var(--text-tertiary)", marginTop: "4px" } }, "Averages stabilizing..."))), /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-body" }, showSettings ? /* @__PURE__ */ import_react.default.createElement(SettingsPanel, { onBack: () => setShowSettings(false) }) : /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title" }, "Today's Averages"), /* @__PURE__ */ import_react.default.createElement("div", { className: !hasData ? "breakdown-disabled" : "" }, /* @__PURE__ */ import_react.default.createElement(
+          ProgressItem,
+          {
+            label: "Avg. Screen time (today)",
+            score: bd.screenTimeScore,
+            rawValue: formatHours(scoreData?.totalScreenMinutes || 0),
+            ideal: "Ideal: < 6h/day",
+            color: "var(--amber-text)"
+          }
+        ), /* @__PURE__ */ import_react.default.createElement(
+          ProgressItem,
+          {
+            label: "Avg. Distance (today)",
+            score: bd.distanceScore,
+            rawValue: `${Math.round(scoreData?.avgDistanceCm || 0)} cm`,
+            ideal: "Ideal: 50\u201370 cm",
+            color: "var(--green-text)"
+          }
+        ), /* @__PURE__ */ import_react.default.createElement(
+          ProgressItem,
+          {
+            label: "Avg. Blink rate (today)",
+            score: bd.blinkScore,
+            rawValue: `${(scoreData?.avgBlinkRate || 0).toFixed(1)}/min`,
+            ideal: "Ideal: 15\u201320 blinks/min",
+            color: "var(--red-text)"
+          }
+        ), /* @__PURE__ */ import_react.default.createElement(
+          ProgressItem,
+          {
+            label: "Avg. Lighting (today)",
+            score: bd.lightingScore,
+            rawValue: `${Math.round(scoreData?.avgLux || 0)} lux (${getLuxLabel(scoreData?.avgLux || 0)})`,
+            ideal: "Ideal: 200\u2013500 lux",
+            color: "var(--green-text)"
+          }
+        )), /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title", style: { marginTop: "20px", marginBottom: "8px" } }, "Current Tracking (Live)"), /* @__PURE__ */ import_react.default.createElement("div", { className: "live-stats" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "stat-item" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "stat-icon" }, "\u23F1\uFE0F"), /* @__PURE__ */ import_react.default.createElement("span", { className: "stat-val" }, formatTime(liveStats.durationMs))), /* @__PURE__ */ import_react.default.createElement("div", { className: "stat-item" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "stat-icon" }, "\u{1F440}"), /* @__PURE__ */ import_react.default.createElement("span", { className: "stat-val" }, !isMonitoring ? "--" : !liveStats.faceDetected ? "Searching..." : `${Math.round(liveStats.blinkRate)}/min`)), /* @__PURE__ */ import_react.default.createElement("div", { className: "stat-item" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "stat-icon" }, "\u{1F4CF}"), /* @__PURE__ */ import_react.default.createElement("span", { className: "stat-val" }, !isMonitoring ? "--" : !liveStats.faceDetected ? "No face" : `${liveStats.distanceCm}cm`)), /* @__PURE__ */ import_react.default.createElement("div", { className: "stat-item" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "stat-icon" }, "\u{1F4A1}"), /* @__PURE__ */ import_react.default.createElement("span", { className: "stat-val" }, !isMonitoring ? "--" : `${liveStats.lux} lux`))), !liveStats.faceDetected && isMonitoring && /* @__PURE__ */ import_react.default.createElement("div", { className: "face-warning" }, "\u26A0\uFE0F Move into camera view for accurate tracking"), /* @__PURE__ */ import_react.default.createElement("div", { className: "divider", style: { margin: "16px 0", height: "1px", background: "var(--border)" } }), /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title" }, "Digital correction"), /* @__PURE__ */ import_react.default.createElement("div", { className: "preset-row" }, ["off", "office", "night"].map((p) => /* @__PURE__ */ import_react.default.createElement("div", { key: p, className: `preset-btn ${activePreset === p ? "on" : ""}`, onClick: () => setPreset(p) }, p.charAt(0).toUpperCase() + p.slice(1)))), /* @__PURE__ */ import_react.default.createElement("button", { className: "view-btn", onClick: () => chrome.tabs.create({ url: "/dist/dashboard/index.html" }) }, "View full dashboard"))));
       }
-      function ProgressItem({ label, value, color }) {
-        return /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-row" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "bar-label" }, label), /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-track" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-fill", style: { width: `${value / 25 * 100}%`, background: color } })), /* @__PURE__ */ import_react.default.createElement("span", { className: "bar-pts" }, Math.round(value)));
+      function ProgressItem({ label, score, rawValue, ideal, color }) {
+        return /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-row-complex" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-header" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "bar-label" }, label), /* @__PURE__ */ import_react.default.createElement("span", { className: "bar-raw-val" }, rawValue)), /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-track" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-fill", style: { width: `${score / 25 * 100}%`, background: color } })), /* @__PURE__ */ import_react.default.createElement("div", { className: "bar-footer" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "bar-ideal" }, ideal), /* @__PURE__ */ import_react.default.createElement("span", { className: "bar-score-pts" }, "Score: ", Math.round(score), " / 25")));
       }
       function SettingsPanel({ onBack }) {
-        return /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "12px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title", style: { margin: 0 } }, "Alert Thresholds"), /* @__PURE__ */ import_react.default.createElement("button", { className: "badge badge-blue", style: { border: "none", cursor: "pointer" }, onClick: onBack }, "Back")), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "14px", fontSize: "12px" } }, /* @__PURE__ */ import_react.default.createElement("div", { className: "slider-row", style: { margin: 0 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "4px" } }, /* @__PURE__ */ import_react.default.createElement("span", null, "Min Distance (cm)"), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 600 } }, "50cm")), /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "30", max: "80", defaultValue: "50", style: { width: "100%" } })), /* @__PURE__ */ import_react.default.createElement("div", { className: "slider-row", style: { margin: 0 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "4px" } }, /* @__PURE__ */ import_react.default.createElement("span", null, "Min Blink Rate (bpm)"), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 600 } }, "15bpm")), /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "5", max: "30", defaultValue: "15", style: { width: "100%" } })), /* @__PURE__ */ import_react.default.createElement("div", { className: "slider-row", style: { margin: 0 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "4px" } }, /* @__PURE__ */ import_react.default.createElement("span", null, "Min Lighting (lux)"), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 600 } }, "50 lux")), /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "10", max: "200", defaultValue: "50", style: { width: "100%" } }))));
+        return /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "12px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement("div", { className: "section-title", style: { margin: 0 } }, "Alert Thresholds"), /* @__PURE__ */ import_react.default.createElement("button", { className: "badge badge-blue", style: { border: "none", cursor: "pointer" }, onClick: onBack }, "Back")), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "14px", fontSize: "12px" } }, /* @__PURE__ */ import_react.default.createElement("div", { className: "slider-row", style: { margin: 0 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "4px" } }, /* @__PURE__ */ import_react.default.createElement("span", null, "Min Distance (cm)"), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 600 } }, "50cm")), /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "30", max: "80", defaultValue: "50", style: { width: "100%" } })), /* @__PURE__ */ import_react.default.createElement("div", { className: "slider-row", style: { margin: 0 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "4px" } }, /* @__PURE__ */ import_react.default.createElement("span", null, "Min Blink Rate (blinks/min)"), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 600 } }, "15/min")), /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "5", max: "30", defaultValue: "15", style: { width: "100%" } })), /* @__PURE__ */ import_react.default.createElement("div", { className: "slider-row", style: { margin: 0 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "4px" } }, /* @__PURE__ */ import_react.default.createElement("span", null, "Min Lighting (lux)"), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 600 } }, "50 lux")), /* @__PURE__ */ import_react.default.createElement("input", { type: "range", min: "10", max: "200", defaultValue: "50", style: { width: "100%" } }))));
       }
       function ConsentScreen({ onAllow }) {
         return /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-popup", style: { border: "none" } }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ext-body", style: { textAlign: "center", padding: "24px 20px" } }, /* @__PURE__ */ import_react.default.createElement("div", { className: "onboard-icon" }, /* @__PURE__ */ import_react.default.createElement("svg", { width: "24", height: "24", viewBox: "0 0 24 24", fill: "none" }, /* @__PURE__ */ import_react.default.createElement("circle", { cx: "12", cy: "8", r: "4", stroke: "#185FA5", "stroke-width": "1.5" }), /* @__PURE__ */ import_react.default.createElement("ellipse", { cx: "12", cy: "8", rx: "2", ry: "4", stroke: "#185FA5", "stroke-width": "1" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M4 20c0-4 3.6-7 8-7s8 3 8 7", stroke: "#185FA5", "stroke-width": "1.5", "stroke-linecap": "round" }))), /* @__PURE__ */ import_react.default.createElement("div", { className: "onboard-title" }, "EyeGuard needs camera access"), /* @__PURE__ */ import_react.default.createElement("div", { className: "onboard-sub" }, "Used only to measure your blink rate and screen distance. No video is ever recorded or sent anywhere \u2014 all processing happens on your device."), /* @__PURE__ */ import_react.default.createElement("div", { className: "privacy-card" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "privacy-title" }, "What stays on your device"), /* @__PURE__ */ import_react.default.createElement("div", { className: "privacy-lines" }, "Raw camera frames \u2014 never stored", /* @__PURE__ */ import_react.default.createElement("br", null), "Face landmarks \u2014 used briefly, then discarded", /* @__PURE__ */ import_react.default.createElement("br", null), "Blink rate, distance \u2014 stored locally only", /* @__PURE__ */ import_react.default.createElement("br", null), "Daily eye score \u2014 yours alone")), /* @__PURE__ */ import_react.default.createElement("div", { className: "onboard-btns" }, /* @__PURE__ */ import_react.default.createElement("button", { className: "btn-secondary", onClick: () => window.close() }, "Not now"), /* @__PURE__ */ import_react.default.createElement("button", { className: "btn-primary", onClick: onAllow }, "Allow camera access"))));

@@ -82,14 +82,21 @@ export default function Dashboard() {
   }, []);
 
   function generateDemoHistory() {
-    return Array.from({ length: 30 }).map((_, i) => ({
-      date: new Date(Date.now() - (29 - i) * 86400000).toISOString().split('T')[0],
-      score: Math.floor(Math.random() * 40 + 40),
-      breakdown: { screenTimeScore: 10, distanceScore: 10, blinkScore: 10, lightingScore: 10 },
-      riskLevel: "moderate" as const,
-      myopiaRiskFlag: false,
-      totalScreenMinutes: 400
-    }));
+    return Array.from({ length: 30 }).map((_, i) => {
+      const totalScreenMinutes = 400;
+      return {
+        date: new Date(Date.now() - (29 - i) * 86400000).toISOString().split('T')[0],
+        score: Math.floor(Math.random() * 40 + 40),
+        breakdown: { screenTimeScore: 10, distanceScore: 10, blinkScore: 10, lightingScore: 10 },
+        riskLevel: "moderate" as const,
+        myopiaRiskFlag: false,
+        totalScreenMinutes,
+        avgDistanceCm: 50 + Math.random() * 20,      // 50–70 cm
+        avgBlinkRate: 12 + Math.random() * 6,        // 12–18 blinks/min
+        avgLux: 100 + Math.random() * 200,           // 100–300 lux
+        totalDurationMs: totalScreenMinutes * 60000
+      };
+    });
   }
 
   function generateDemoAlerts(): AlertEvent[] {
@@ -152,7 +159,7 @@ export default function Dashboard() {
         {/* Center / Right Column: Deep data & Overrides */}
         <div className="lg:col-span-8 flex flex-col gap-8">
           {/* Top Section: Charts */}
-          <div className="flex flex-col glassmorphism p-6 h-auto min-h-[300px]">
+          <div className="flex flex-col glassmorphism p-6 h-[320px]">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-white/50 text-xs font-semibold uppercase tracking-wider">30-day eye score history</h3>
               <span className="badge badge-amber">Avg: {Math.round(displayHistory.reduce((a,b)=>a+b.score,0)/displayHistory.length)}</span>

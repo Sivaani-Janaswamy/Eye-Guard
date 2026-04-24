@@ -14,6 +14,7 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
   let faceMesh: FaceMesh | null = null;
   let videoElement: HTMLVideoElement | null = null;
   let isRunning = false;
+let cameraActive = false;
   let animFrameId: number | null = null;
 
   // --- STATE FOR SMOOTHING & BLINKS ---
@@ -202,8 +203,12 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
   let lastFrameLog = Date.now();
 
   async function processFrame() {
-    if (!isRunning) {
-      console.log('[EyeGuard:main-world] Loop stopped intentionally');
+    if (!isRunning || !cameraActive) {
+      if (!cameraActive) {
+        console.log('[EyeGuard:main-world] Camera inactive - stopping loop');
+        animFrameId = null;
+        return;
+      }
       return;
     }
 
@@ -237,8 +242,19 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
   function startProcessingLoop() {
     if (animFrameId !== null) return; // already running
     isRunning = true;
+    cameraActive = true;
     console.log('[EyeGuard:main-world] Starting faceMesh send loop');
     animFrameId = requestAnimationFrame(processFrame);
+  }
+
+  function stopProcessingLoop() {
+    isRunning = false;
+    cameraActive = false;
+    if (animFrameId) {
+      cancelAnimationFrame(animFrameId);
+      animFrameId = null;
+    }
+    console.log('[EyeGuard:main-world] Processing loop stopped');
   }
 
   // Monitor for video element
@@ -302,6 +318,12 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
       return originalOpen.apply(this, [method, redirectedUrl, ...rest] as any);
     }
     return originalOpen.apply(this, [method, url, ...rest] as any);
+  };
+
+  // Expose control functions to overlay script
+  (window as any).eyeguardMainWorld = {
+    startProcessingLoop,
+    stopProcessingLoop
   };
 
   console.log('[EyeGuard] Main-world engine active');

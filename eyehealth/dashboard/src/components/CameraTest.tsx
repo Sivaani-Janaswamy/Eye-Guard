@@ -111,6 +111,7 @@ function CameraTest() {
   useEffect(() => {
     const listener = (message: any) => {
       if (message.type === 'LIVE_STATS_UPDATE') {
+        console.log('[STATS UPDATE] Received live data');
         setDisplayStats(message.payload);
       }
     };
@@ -120,6 +121,9 @@ function CameraTest() {
 
   // ---------------- LANDMARKS SYNC ----------------
   useEffect(() => {
+    // Only update landmarks for the overlay if the local camera is active
+    if (camStatus !== 'on') return;
+
     const landmarks = displayStats?.landmarks;
     if (landmarks && landmarks.length > 0) {
       lastLandmarksRef.current = landmarks;
@@ -131,11 +135,11 @@ function CameraTest() {
       console.warn("No landmarks received from LIVE_STATS_UPDATE (using last known)");
       logFlags.current.lastLandmarkLog = Date.now();
     }
-  }, [displayStats]);
+  }, [displayStats, camStatus]);
 
   // ---------------- FPS TRACKING ----------------
   useEffect(() => {
-    if (!displayStats) return;
+    if (!displayStats || camStatus !== 'on') return;
 
     fpsCountRef.current++;
     const now = Date.now();
@@ -146,10 +150,18 @@ function CameraTest() {
       fpsCountRef.current = 0;
       lastFpsReset.current = now;
     }
-  }, [displayStats?.updatedAt]);
+  }, [displayStats?.updatedAt, camStatus]);
 
   // ---------------- DRAW LOOP ----------------
   useEffect(() => {
+    if (camStatus !== 'on') {
+      console.log('[LOOP STOP] Camera is off');
+      const ctx = canvasRef.current?.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, canvasRef.current?.width || 0, canvasRef.current?.height || 0);
+      return;
+    }
+
+    console.log('[LOOP START] Initializing render loop');
     function drawLoop() {
       const canvas = canvasRef.current;
       const video = videoRef.current;
@@ -171,7 +183,7 @@ function CameraTest() {
 
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          if (lastLandmarksRef.current) {
+          if (lastLandmarksRef.current && camStatus === 'on') {
             drawLandmarks(ctx, lastLandmarksRef.current, w, h);
           } else {
             ctx.clearRect(0, 0, w, h);
@@ -185,10 +197,12 @@ function CameraTest() {
     animRef.current = requestAnimationFrame(drawLoop);
     return () => {
       if (animRef.current !== null) {
+        console.log('[LOOP STOP] Cleaning up animation frame');
         cancelAnimationFrame(animRef.current);
+        animRef.current = null;
       }
     };
-  }, []);
+  }, [camStatus]);
 
   // ---------------- CAMERA ----------------
   const startCamera = useCallback(async () => {
@@ -304,73 +318,89 @@ function CameraTest() {
         </div>
       </div>
 
-      <div style={{ 
-        width: '100%', 
-        background: 'var(--bg-secondary)', 
-        borderRadius: 'var(--radius-md)', 
-        position: 'relative', 
-        overflow: 'hidden',
-        aspectRatio: '4/3',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <video 
-          ref={videoRef} 
-          id="eyeguard-video" 
-          autoPlay 
-          muted 
-          playsInline 
-          style={{ 
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            display: camStatus === 'on' ? 'block' : 'none'
-          }} 
-        />
-        <canvas
-          ref={canvasRef}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            pointerEvents: 'none',
-            zIndex: 10
-          }}
-        />
-        
-        {/* Simple status overlay when camera is starting or off */}
-        {camStatus !== 'on' && (
-          <div style={{ position: 'absolute', color: 'var(--text-tertiary)', fontSize: '12px', fontWeight: 600 }}>
-            {camStatus === 'starting' ? 'Initializing Camera...' : 'Camera Feed Inactive'}
-          </div>
-        )}
-
-        {/* Keeping existing distance indicators as a minimal overlay */}
+      {/* Main split container */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Left Section: Camera Feed (~60%) */}
         <div style={{ 
-          width: '24px', height: '24px', borderRadius: '50%', border: '2px solid var(--blue-text)', 
-          position: 'absolute', bottom: '16px', left: `${faceLeftPct}%`, transform: 'translateX(-50%)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'left 0.5s ease-out',
-          zIndex: 20, background: 'rgba(255,255,255,0.8)'
+          flex: '1.5',
+          background: 'var(--bg-secondary)', 
+          borderRadius: 'var(--radius-md)', 
+          position: 'relative', 
+          overflow: 'hidden',
+          aspectRatio: '4/3',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
         }}>
-          <svg width="12" height="10" viewBox="0 0 20 16" fill="none">
-            <circle cx="6" cy="8" r="3" stroke="var(--blue-text)" strokeWidth="1.2"/>
-            <circle cx="14" cy="8" r="3" stroke="var(--blue-text)" strokeWidth="1.2"/>
-          </svg>
-        </div>
-      </div>
+          <video 
+            ref={videoRef} 
+            id="eyeguard-video" 
+            autoPlay 
+            muted 
+            playsInline 
+            style={{ 
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: camStatus === 'on' ? 'block' : 'none'
+            }} 
+          />
+          <canvas
+            ref={canvasRef}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+              zIndex: 10
+            }}
+          />
+          
+          {camStatus !== 'on' && (
+            <div style={{ position: 'absolute', color: 'var(--text-tertiary)', fontSize: '12px', fontWeight: 600 }}>
+              {camStatus === 'starting' ? 'Initializing Camera...' : 'Camera Feed Inactive'}
+            </div>
+          )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {metrics.map((m, i) => (
-          <div key={i} style={{ background: 'var(--bg-secondary)', border: '0.5px solid var(--border)' }} className="p-3 rounded-xl flex flex-col gap-1">
-            <span style={{ color: 'var(--text-tertiary)' }} className="text-[10px] uppercase font-bold tracking-wider">{m.label}</span>
-            <span style={{ color: m.warn ? 'var(--amber-text)' : 'var(--text-primary)' }} className="text-lg font-bold">
-              {m.value}
-            </span>
+          <div style={{ 
+            width: '24px', height: '24px', borderRadius: '50%', border: '2px solid var(--blue-text)', 
+            position: 'absolute', bottom: '16px', left: `${faceLeftPct}%`, transform: 'translateX(-50%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'left 0.5s ease-out',
+            zIndex: 20, background: 'rgba(255,255,255,0.8)'
+          }}>
+            <svg width="12" height="10" viewBox="0 0 20 16" fill="none">
+              <circle cx="6" cy="8" r="3" stroke="var(--blue-text)" strokeWidth="1.2"/>
+              <circle cx="14" cy="8" r="3" stroke="var(--blue-text)" strokeWidth="1.2"/>
+            </svg>
           </div>
-        ))}
+        </div>
+
+        {/* Right Section: Diagnostics Panel (~40%) */}
+        <div className="flex-1 flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            {metrics.map((m, i) => (
+              <div key={i} style={{ background: 'var(--bg-secondary)', border: '0.5px solid var(--border)' }} className="p-3 rounded-xl flex flex-col gap-0.5">
+                <span style={{ color: 'var(--text-tertiary)' }} className="text-[9px] uppercase font-bold tracking-wider leading-tight">{m.label}</span>
+                <span style={{ color: m.warn ? 'var(--amber-text)' : 'var(--text-primary)' }} className="text-base font-bold leading-tight">
+                  {m.value}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Status Badge */}
+          <div style={{ 
+            background: statusColor.bg, 
+            color: statusColor.text,
+            border: '0.5px solid var(--border)',
+            fontSize: '11px',
+            fontWeight: 700
+          }} className="mt-auto p-3 rounded-lg text-center uppercase tracking-widest">
+            {!hasLiveData ? 'OFFLINE' : displayStats.faceDetected ? 'Face Detected' : 'No Face Detected'}
+          </div>
+        </div>
       </div>
     </div>
   );

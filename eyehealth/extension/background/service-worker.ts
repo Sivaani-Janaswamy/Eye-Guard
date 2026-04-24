@@ -188,25 +188,27 @@ async function setupRecomputeAlarm() {
   await chrome.alarms.create('RECOMPUTE_SCORE', { periodInMinutes: 1 });
 }
 
+// Broadcast helper
+async function broadcastScoreUpdate() {
+  try {
+    const score = await scoreEngine.getTodayScore();
+    chrome.runtime.sendMessage({ 
+      type: 'SCORE_UPDATE', 
+      payload: { scoreData: score } 
+    }).catch(() => {});
+  } catch (err) {
+    console.error('[EyeGuard:SW] Score broadcast failed:', err);
+  }
+}
+
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "COMPUTE_DAILY_SCORE") {
     console.log("Triggering daily score computation");
-    await scoreEngine.getTodayScore();
+    await broadcastScoreUpdate();
   }
 
   if (alarm.name === 'RECOMPUTE_SCORE') {
-    const today = new Date().toISOString().split('T')[0];
-    const startDate = new Date(`${today}T00:00:00`);
-
-    const sessions = await db.sessions
-      .where('startTime')
-      .aboveOrEqual(startDate.getTime())
-      .toArray();
-
-    if (sessions.length > 0) {
-      const score = await scoreEngine.getTodayScore();
-      console.log('[EyeGuard:SW] Daily score recomputed:', score.score);
-    }
+    await broadcastScoreUpdate();
   }
 });
 
@@ -410,28 +412,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       if (frameBuffer.length % 25 === 0 && activeSessionId) {
         const faced = frameBuffer.slice(-25).filter(f => f.faceDetected);
+        const now = Date.now();
+        const newTotalDuration = now - (sessionStartTime ?? now);
+        
+        const session = await db.sessions.get(activeSessionId);
 
-        if (faced.length > 0) {
-          const avgDist = faced.reduce((s,f)=>s+f.screenDistanceCm,0)/faced.length;
-          const avgBlink = faced.reduce((s,f)=>s+f.blinkRate,0)/faced.length;
-          const avgLux = frameBuffer.slice(-25).reduce((s,f)=>s+f.ambientLuxLevel,0)/25;
+        if (session && faced.length > 0) {
+          const prevDuration = session.durationMs;
+          const batchDuration = Math.max(1, newTotalDuration - prevDuration);
 
-          await db.sessions.update(activeSessionId, {
-            durationMs: Date.now() - (sessionStartTime ?? Date.now()),
-            avgDistanceCm: parseFloat(avgDist.toFixed(1)),
-            avgBlinkRate: parseFloat(avgBlink.toFixed(1)),
-            avgLuxLevel: Math.round(avgLux),
-            endTime: Date.now()
-          }).catch(() => {});
+          const batchDist = faced.reduce((s,f) => s + f.screenDistanceCm, 0) / faced.length;
+          const batchBlink = faced.reduce((s,f) => s + f.blinkRate, 0) / faced.length;
+          const batchLux = frameBuffer.slice(-25).reduce((s,f) => s + f.ambientLuxLevel, 0) / 25;
+
+          const update: any = { durationMs: newTotalDuration };
+
+          if (prevDuration === 0) {
+            update.avgDistanceCm = batchDist;
+            update.avgBlinkRate = batchBlink;
+            update.avgLuxLevel = batchLux;
+          } else {
+            // True Weighted Average: (avg1 * dur1 + avg2 * dur2) / (dur1 + dur2)
+            update.avgDistanceCm = (session.avgDistanceCm * prevDuration + batchDist * batchDuration) / newTotalDuration;
+            update.avgBlinkRate = (session.avgBlinkRate * prevDuration + batchBlink * batchDuration) / newTotalDuration;
+            update.avgLuxLevel = (session.avgLuxLevel * prevDuration + batchLux * batchDuration) / newTotalDuration;
+          }
+
+          await db.sessions.update(activeSessionId, update).catch(() => {});
         }
-      }
-
-      // Recompute score every 60 frames (~1 minute at throttled rate, or ~2s at raw rate)
-      // Actually 60 frames of data is a good trigger for score updates
-      if (frameBuffer.length % 60 === 0) {
-        scoreEngine.getTodayScore().then(score => {
-          console.log('[EyeGuard:SW] Score recomputed:', score.score);
-        }).catch(() => {});
       }
 
       sendResponse({ ok: true });

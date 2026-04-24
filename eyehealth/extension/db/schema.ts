@@ -37,9 +37,13 @@ export interface DailyEyeScore {
     blinkScore: number;       // 0–25
     lightingScore: number;    // 0–25
   };
+  avgDistanceCm: number;
+  avgBlinkRate: number;
+  avgLux: number;
   riskLevel: "low" | "moderate" | "high";
   myopiaRiskFlag: boolean;    // true if score < 50 for 3+ consecutive days
   totalScreenMinutes: number;
+  totalDurationMs: number;
 }
 
 export interface AlertEvent {

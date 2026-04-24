@@ -15,7 +15,7 @@ function Popup() {
   
   // Real-time Live Stats
   const [liveStats, setLiveStats] = useState({
-    distanceCm: 0, blinkRate: 0, faceDetected: false, durationMs: 0,
+    distanceCm: 0, blinkRate: 0, lux: 0, faceDetected: false, durationMs: 0,
     alerts: [] as any[]
   });
 
@@ -28,17 +28,14 @@ function Popup() {
       const tzOffset = new Date().getTimezoneOffset() * 60000;
       const todayString = new Date(Date.now() - tzOffset).toISOString().split("T")[0];
       const todayScoreArr = await db.scores.where("date").equals(todayString).toArray();
+      
+      // Initial Load
       if (todayScoreArr.length > 0) {
         setScoreData(todayScoreArr[0]);
       } else {
-        setScoreData({
-          date: todayString, score: 100,
-          breakdown: { screenTimeScore: 25, distanceScore: 25, blinkScore: 25, lightingScore: 25 },
-          riskLevel: "low", myopiaRiskFlag: false, totalScreenMinutes: 0
-        });
+        setScoreData(null);
       }
 
-      // Initial session load (fallback/start state)
       const sessions = await db.sessions.orderBy("startTime").reverse().limit(1).toArray();
       if (sessions.length > 0 && sessions[0].endTime === null) {
         setActiveSession(sessions[0]);
@@ -49,11 +46,23 @@ function Popup() {
         setActivePreset(correctionProfileObj.activePreset);
       }
 
-      const settings = await chrome.storage.local.get("theme");
+      const settings = await chrome.storage.local.get(["theme", "isMonitoring"]);
       if (settings.theme) setTheme(settings.theme);
+      if (settings.isMonitoring !== undefined) setIsMonitoring(settings.isMonitoring);
+      
+      // Pre-load last live stats to avoid flicker
+      const lastLive = await db.live_stats.get(1);
+      if (lastLive) {
+        setLiveStats(prev => ({
+          ...prev,
+          distanceCm: lastLive.distanceCm,
+          blinkRate: lastLive.blinkRate,
+          lux: lastLive.lux,
+          faceDetected: lastLive.faceDetected
+        }));
+      }
     };
     loadData();
-    // No more polling here — session time is now event-driven
   }, []);
 
   const formatTime = (ms: number) => {
@@ -63,6 +72,19 @@ function Popup() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const formatHours = (mins: number) => {
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    return `${h}h ${m}m`;
+  };
+
+  const getLuxLabel = (lux: number) => {
+    if (lux < 50) return "Very Dim";
+    if (lux < 150) return "Dim";
+    if (lux < 300) return "Good";
+    return "Bright";
+  };
+
   useEffect(() => {
     const listener = (message: any) => {
       if (message.type === 'LIVE_STATS_UPDATE') {
@@ -70,10 +92,14 @@ function Popup() {
         setLiveStats({
           distanceCm: live.distanceCm,
           blinkRate: live.blinkRate,
+          lux: live.lux,
           faceDetected: live.faceDetected,
           durationMs: live.durationMs || 0,
           alerts: live.alerts || []
         });
+      }
+      if (message.type === 'SCORE_UPDATE') {
+        setScoreData(message.payload.scoreData);
       }
     };
 
@@ -90,6 +116,7 @@ function Popup() {
   const toggleMon = () => {
     const newVal = !isMonitoring;
     setIsMonitoring(newVal);
+    chrome.storage.local.set({ isMonitoring: newVal });
     chrome.runtime.sendMessage({ type: newVal ? "START_MONITORING" : "STOP_MONITORING" });
   };
 
@@ -118,25 +145,31 @@ function Popup() {
   if (hasConsent === null) return null;
   if (!hasConsent) return <ConsentScreen onAllow={handleGrantConsent} />;
 
-  const score = scoreData?.score || 100;
+  // Readiness Signal: use totalDurationMs directly from unrounded engine data
+  const totalDurationMs = scoreData?.totalDurationMs || 0;
+  const hasData = scoreData !== null && totalDurationMs > 5000;
+  const score = scoreData?.score || 0;
+  
   const riskClass = score >= 75 ? "score-green" : score >= 50 ? "score-amber" : "score-red";
   const badgeClass = score >= 75 ? "badge-green" : score >= 50 ? "badge-amber" : "badge-red";
   const riskLabel = score >= 75 ? "Low risk" : score >= 50 ? "Moderate risk" : "High risk";
 
+  const bd = scoreData?.breakdown || { screenTimeScore: 0, distanceScore: 0, blinkScore: 0, lightingScore: 0 };
+
   return (
-    <div className="ext-popup">
+    <div className={`ext-popup ${theme === "dark" ? "dark-mode" : ""}`}>
       <div className="ext-header">
         <div className="ext-header-row">
           <div className="ext-title">EyeGuard</div>
           <div className="header-controls">
-            <span className="theme-toggle" onClick={toggleTheme}>
+            <div className="theme-toggle" onClick={toggleTheme} title="Toggle Theme">
               {theme === "dark" ? "☀️" : "🌙"}
-            </span>
-            <span className="settings-toggle" onClick={() => setShowSettings(!showSettings)}>⚙️</span>
-            <span className={`mon-status ${isMonitoring ? "mon-on" : "mon-off"}`}>
+            </div>
+            <div className="settings-toggle" onClick={() => setShowSettings(!showSettings)} title="Settings">⚙️</div>
+            <div className={`mon-status ${isMonitoring ? "mon-on" : "mon-off"}`}>
               {isMonitoring ? "Monitoring on" : "Monitoring off"}
-            </span>
-            <div className={`toggle ${isMonitoring ? "on" : ""}`} onClick={toggleMon}>
+            </div>
+            <div className={`toggle ${isMonitoring ? "on" : ""}`} onClick={toggleMon} title="Toggle Monitoring">
               <div className="toggle-thumb"></div>
             </div>
           </div>
@@ -145,10 +178,24 @@ function Popup() {
         {!showSettings && (
           <div className="score-section">
             <div className="score-label">Today's eye score</div>
-            <div className={`big-score ${riskClass}`}>{score}</div>
-            <div className="badge-container">
-              <span className={`badge ${badgeClass}`}>{riskLabel}</span>
-            </div>
+            {hasData ? (
+              <>
+                <div className={`big-score ${riskClass}`}>{score}</div>
+                <div className="badge-container">
+                  <span className={`badge ${badgeClass}`}>{riskLabel}</span>
+                </div>
+              </>
+            ) : (
+              <div className="no-data-msg">
+                {!isMonitoring ? "Start monitoring to see your score." : 
+                  totalDurationMs < 5000 ? "Collecting data..." : "Collecting reliable data..."}
+              </div>
+            )}
+            {hasData && totalDurationMs < 120000 && (
+              <div className="confidence-hint" style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                Averages stabilizing...
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -158,25 +205,74 @@ function Popup() {
           <SettingsPanel onBack={() => setShowSettings(false)} />
         ) : (
           <>
-            <div className="section-title">Score breakdown</div>
-            <ProgressItem label="Screen time" value={scoreData?.breakdown.screenTimeScore || 0} color="var(--amber-text)" />
-            <ProgressItem label="Distance" value={scoreData?.breakdown.distanceScore || 0} color="var(--green-text)" />
-            <ProgressItem label="Blink rate" value={scoreData?.breakdown.blinkScore || 0} color="var(--red-text)" />
-            <ProgressItem label="Lighting" value={scoreData?.breakdown.lightingScore || 0} color="var(--green-text)" />
-
-            <div className="live-stats">
-              <span>⏱️ {formatTime(liveStats.durationMs)}</span>
-              <span>👀 {liveStats.blinkRate} bpm</span>
-              <span>📏 {liveStats.distanceCm}cm</span>
+            <div className="section-title">Today's Averages</div>
+            <div className={!hasData ? "breakdown-disabled" : ""}>
+              <ProgressItem 
+                label="Avg. Screen time (today)" 
+                score={bd.screenTimeScore} 
+                rawValue={formatHours(scoreData?.totalScreenMinutes || 0)}
+                ideal="Ideal: < 6h/day"
+                color="var(--amber-text)" 
+              />
+              <ProgressItem 
+                label="Avg. Distance (today)" 
+                score={bd.distanceScore} 
+                rawValue={`${Math.round(scoreData?.avgDistanceCm || 0)} cm`}
+                ideal="Ideal: 50–70 cm"
+                color="var(--green-text)" 
+              />
+              <ProgressItem 
+                label="Avg. Blink rate (today)" 
+                score={bd.blinkScore} 
+                rawValue={`${(scoreData?.avgBlinkRate || 0).toFixed(1)}/min`}
+                ideal="Ideal: 15–20 blinks/min"
+                color="var(--red-text)" 
+              />
+              <ProgressItem 
+                label="Avg. Lighting (today)" 
+                score={bd.lightingScore} 
+                rawValue={`${Math.round(scoreData?.avgLux || 0)} lux (${getLuxLabel(scoreData?.avgLux || 0)})`}
+                ideal="Ideal: 200–500 lux"
+                color="var(--green-text)" 
+              />
             </div>
 
-            {liveStats.alerts.length > 0 && (
-              <div className="live-alert-banner">
-                ⚠️ {liveStats.alerts[liveStats.alerts.length - 1].message.split(' — ')[0]}
+            <div className="section-title" style={{ marginTop: '20px', marginBottom: '8px' }}>Current Tracking (Live)</div>
+            <div className="live-stats">
+              <div className="stat-item">
+                <span className="stat-icon">⏱️</span>
+                <span className="stat-val">{formatTime(liveStats.durationMs)}</span>
+              </div>
+              
+              <div className="stat-item">
+                <span className="stat-icon">👀</span>
+                <span className="stat-val">
+                  {!isMonitoring ? "--" : !liveStats.faceDetected ? "Searching..." : `${Math.round(liveStats.blinkRate)}/min`}
+                </span>
+              </div>
+
+              <div className="stat-item">
+                <span className="stat-icon">📏</span>
+                <span className="stat-val">
+                  {!isMonitoring ? "--" : !liveStats.faceDetected ? "No face" : `${liveStats.distanceCm}cm`}
+                </span>
+              </div>
+
+              <div className="stat-item">
+                <span className="stat-icon">💡</span>
+                <span className="stat-val">
+                  {!isMonitoring ? "--" : `${liveStats.lux} lux`}
+                </span>
+              </div>
+            </div>
+
+            {!liveStats.faceDetected && isMonitoring && (
+              <div className="face-warning">
+                ⚠️ Move into camera view for accurate tracking
               </div>
             )}
 
-            <div className="divider"></div>
+            <div className="divider" style={{ margin: '16px 0', height: '1px', background: 'var(--border)' }}></div>
             <div className="section-title">Digital correction</div>
             <div className="preset-row">
               {(["off", "office", "night"] as const).map(p => (
@@ -195,14 +291,22 @@ function Popup() {
   );
 }
 
-function ProgressItem({ label, value, color }: { label: string, value: number, color: string }) {
+function ProgressItem({ label, score, rawValue, ideal, color }: { 
+  label: string, score: number, rawValue: string, ideal: string, color: string 
+}) {
   return (
-    <div className="bar-row">
-      <span className="bar-label">{label}</span>
-      <div className="bar-track">
-        <div className="bar-fill" style={{ width: `${(value / 25) * 100}%`, background: color }}></div>
+    <div className="bar-row-complex">
+      <div className="bar-header">
+        <span className="bar-label">{label}</span>
+        <span className="bar-raw-val">{rawValue}</span>
       </div>
-      <span className="bar-pts">{Math.round(value)}</span>
+      <div className="bar-track">
+        <div className="bar-fill" style={{ width: `${(score / 25) * 100}%`, background: color }}></div>
+      </div>
+      <div className="bar-footer">
+        <span className="bar-ideal">{ideal}</span>
+        <span className="bar-score-pts">Score: {Math.round(score)} / 25</span>
+      </div>
     </div>
   );
 }
@@ -224,8 +328,8 @@ function SettingsPanel({ onBack }: { onBack: () => void }) {
         </div>
         <div className="slider-row" style={{ margin: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-            <span>Min Blink Rate (bpm)</span>
-            <span style={{ fontWeight: 600 }}>15bpm</span>
+            <span>Min Blink Rate (blinks/min)</span>
+            <span style={{ fontWeight: 600 }}>15/min</span>
           </div>
           <input type="range" min="5" max="30" defaultValue="15" style={{ width: "100%" }} />
         </div>

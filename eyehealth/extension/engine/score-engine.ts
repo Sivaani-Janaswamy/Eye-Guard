@@ -25,9 +25,13 @@ function nullScore(today: string): DailyEyeScore {
     date: today,
     score: 0,
     breakdown: { screenTimeScore: 0, distanceScore: 0, blinkScore: 0, lightingScore: 0 },
+    avgDistanceCm: 0,
+    avgBlinkRate: 0,
+    avgLux: 0,
     riskLevel: "high",
     myopiaRiskFlag: false,
     totalScreenMinutes: 0,
+    totalDurationMs: 0,
   };
 }
 
@@ -41,7 +45,8 @@ export class ScoreEngine {
   public computeDailyScore(sessions: SessionRecord[], today: string): DailyEyeScore {
     if (sessions.length === 0) return nullScore(today);
 
-    const totalMins = sessions.reduce((s, r) => s + r.durationMs / 60000, 0);
+    const totalMs = sessions.reduce((s, r) => s + r.durationMs, 0);
+    const totalMins = totalMs / 60000;
     const avgDist = weightedAvg(sessions, "avgDistanceCm");
     const avgBlink = weightedAvg(sessions, "avgBlinkRate");
     const avgLux = weightedAvg(sessions, "avgLuxLevel");
@@ -66,9 +71,13 @@ export class ScoreEngine {
       date: today,
       score,
       breakdown: { screenTimeScore, distanceScore, blinkScore, lightingScore },
+      avgDistanceCm: Math.round(avgDist),
+      avgBlinkRate: parseFloat(avgBlink.toFixed(1)),
+      avgLux: Math.round(avgLux),
       riskLevel,
       myopiaRiskFlag,
       totalScreenMinutes: Math.round(totalMins),
+      totalDurationMs: totalMs,
     };
   }
 
