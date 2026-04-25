@@ -10,19 +10,23 @@ import { CorrectionPanel } from '../components/CorrectionPanel';
 import CameraTest from '../components/CameraTest';
 
 export default function Dashboard() {
-  // VERSION: 2026-04-24-toast-fixes
+  // VERSION: 2026-04-25-dexie-single-source
   const [isDemoData, setIsDemoData] = useState(false);
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
 
-  // Reactive Data Queries
-  const scores = useLiveQuery(() => db.scores.orderBy('date').reverse().toArray(), []);
-  const alerts = useLiveQuery(() => db.alerts.orderBy('triggeredAt').reverse().limit(10).toArray(), []);
-  const liveStats = useLiveQuery(() => (db as any).live_stats.get(1), []);
-  const activeSession = useLiveQuery(
-    () => db.sessions.orderBy('startTime').reverse().first().then(s => (s && s.endTime === null) ? s : null),
-    []
+  // Dexie-based real-time data (single source of truth)
+  const liveStats = useLiveQuery(
+    () => db.table('live_stats').get(1),
+    [],
+    null
   );
-
+  
+  const sessionData = useLiveQuery(
+    () => db.table('session_data').get(1),
+    [],
+    null
+  );
+  
   const [sessionTimeMs, setSessionTimeMs] = useState(0);
 
   const formatTime = (ms: number) => {
@@ -31,26 +35,16 @@ export default function Dashboard() {
     const secs = totalSeconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
-
-  // Initial session load (fallback)
+  
+  // Update session time from Dexie data
   useEffect(() => {
-    db.sessions.orderBy('startTime').reverse().first().then(s => {
-      if (s && s.endTime === null) {
-        setSessionTimeMs(Date.now() - s.startTime);
-      }
-    });
-  }, []);
+    if (sessionData?.durationMs !== undefined) {
+      setSessionTimeMs(sessionData.durationMs);
+    }
+  }, [sessionData]);
 
-  // Sync session time from live stats stream
-  useEffect(() => {
-    const listener = (message: any) => {
-      if (message.type === 'LIVE_STATS_UPDATE' && message.payload.durationMs !== undefined) {
-        setSessionTimeMs(message.payload.durationMs);
-      }
-    };
-    chrome.runtime.onMessage.addListener(listener);
-    return () => chrome.runtime.onMessage.removeListener(listener);
-  }, []);
+  // Remove all chrome.runtime.onMessage listeners - use Dexie only
+  // No more message handling for stats
 
 
   // Prediction load (not reactive as it changes slowly)
@@ -59,6 +53,14 @@ export default function Dashboard() {
       if (p) setPrediction(p);
     });
   }, []);
+
+  // Reactive Data Queries
+  const scores = useLiveQuery(() => db.scores.orderBy('date').reverse().toArray(), []);
+  const alerts = useLiveQuery(() => db.alerts.orderBy('triggeredAt').reverse().limit(10).toArray(), []);
+  const activeSession = useLiveQuery(
+    () => db.sessions.orderBy('startTime').reverse().first().then(s => (s && s.endTime === null) ? s : null),
+    []
+  );
 
   // Sync Logic Derived from Live Queries
   const todayScore = (scores && scores.length > 0) ? scores[0] : null;

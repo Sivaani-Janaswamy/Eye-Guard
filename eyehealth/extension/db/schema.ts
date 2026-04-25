@@ -107,6 +107,11 @@ export class EyeGuardDB extends Dexie {
     confidence?: number;
     landmarks?: number[][] | null;
   }>;
+  session_data!: Table<{
+    id: number;
+    durationMs: number;
+    updatedAt: number;
+  }>;
 
   constructor() {
     super("EyeGuardDB");
@@ -122,6 +127,10 @@ export class EyeGuardDB extends Dexie {
 
     this.version(2).stores({
       live_stats: "id"
+    });
+
+    this.version(3).stores({
+      session_data: "id, updatedAt"
     });
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, memo } from 'react';
+import { useEffect, useRef, useState, useCallback, memo, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../../extension/db/db';
 
@@ -99,6 +99,7 @@ function CameraTest() {
   const lastDisplayUpdateRef = useRef(0);
 
   const [displayStats, setDisplayStats] = useState<LiveStats | null>(null);
+  const [debugMode, setDebugMode] = useState(false);
 
   // 1. Initial load from DB
   useEffect(() => {
@@ -286,6 +287,21 @@ function CameraTest() {
     }
   ];
 
+  // ---------------- OPTIONAL DEBUG MODE ----------------
+  // Debug information display
+  const debugInfo = useMemo(() => {
+    if (!debugMode) return null;
+    
+    return {
+      fps: fps,
+      dataAge: displayStats ? Math.round((Date.now() - displayStats.updatedAt) / 1000) : null,
+      writeFrequency: '3 FPS (333ms)',
+      hasLiveData,
+      camStatus,
+      landmarksCount: displayStats?.landmarks?.length || 0
+    };
+  }, [debugMode, fps, displayStats, hasLiveData, camStatus]);
+
   const minDist = 20;
   const maxDist = 80;
   const distanceCm = displayStats?.distanceCm || 50;
@@ -315,6 +331,18 @@ function CameraTest() {
               Stop Camera
             </button>
           )}
+          {/* Debug Mode Toggle */}
+          <button 
+            onClick={() => setDebugMode(!debugMode)} 
+            style={{ 
+              background: debugMode ? 'var(--amber-bg)' : 'var(--bg-secondary)', 
+              color: debugMode ? 'var(--amber-text)' : 'var(--text-secondary)', 
+              border: '0.5px solid var(--border)' 
+            }} 
+            className="text-xs px-2 py-1 rounded transition font-bold"
+          >
+            {debugMode ? 'Debug ON' : 'Debug OFF'}
+          </button>
         </div>
       </div>
 
@@ -400,6 +428,28 @@ function CameraTest() {
           }} className="mt-auto p-3 rounded-lg text-center uppercase tracking-widest">
             {!hasLiveData ? 'OFFLINE' : displayStats.faceDetected ? 'Face Detected' : 'No Face Detected'}
           </div>
+          
+          {/* Debug Info Display */}
+          {debugMode && debugInfo && (
+            <div style={{ 
+              background: 'var(--bg-secondary)', 
+              border: '0.5px solid var(--amber-border)', 
+              borderRadius: 'var(--radius-md)',
+              padding: '12px',
+              fontSize: '10px',
+              fontFamily: 'monospace'
+            }} className="mt-4">
+              <div style={{ color: 'var(--amber-text)', fontWeight: 'bold', marginBottom: '8px' }}>DEBUG INFO</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div>FPS: {debugInfo.fps}</div>
+                <div>Data Age: {debugInfo.dataAge !== null ? `${debugInfo.dataAge}s` : 'N/A'}</div>
+                <div>Write Freq: {debugInfo.writeFrequency}</div>
+                <div>Status: {debugInfo.camStatus}</div>
+                <div>Landmarks: {debugInfo.landmarksCount}</div>
+                <div>Live Data: {debugInfo.hasLiveData ? 'Yes' : 'No'}</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

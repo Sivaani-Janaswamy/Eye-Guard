@@ -726,6 +726,13 @@ window.addEventListener('message', (event) => {
       landmarks: frameData.landmarks
     }
   }).catch(() => {});
+  
+  console.log('[OVERLAY DEBUG] Forwarding SENSOR_FRAME', {
+    screenDistanceCm: frameData.screenDistanceCm,
+    blinkRate: frameData.blinkRate,
+    ambientLuxLevel: frameData.ambientLuxLevel,
+    faceDetected: frameData.faceDetected
+  });
 });
 
 // Centralized Alert Display
