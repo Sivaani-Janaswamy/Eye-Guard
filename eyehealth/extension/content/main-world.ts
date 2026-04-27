@@ -26,6 +26,7 @@ let cameraActive = false;
   let isBlinking = false;
   let lastLux = 100;
   let smoothedLux = 0; // Persistent smoothed value
+  let sendErrorLogged = false; // Deduplicate error logging
 
   // Offscreen canvas for lighting computation
   const lightingCanvas = document.createElement('canvas');
@@ -87,7 +88,7 @@ let cameraActive = false;
   try {
     faceMesh = new FaceMesh({
       locateFile: (file) => {
-        const url = `chrome-extension://${EXT_ID}/dist/cv/${file}`;
+        const url = `chrome-extension://${EXT_ID}/face_mesh/${file}`;
         return url;
       }
     });
@@ -244,7 +245,10 @@ let cameraActive = false;
           framesSent++;
         }
       } catch (err) {
-        console.error('[EyeGuard:main-world] faceMesh.send failed:', err);
+        if (!sendErrorLogged) {
+          console.error('[EyeGuard:main-world] faceMesh.send failed (first occurrence):', err);
+          sendErrorLogged = true;
+        }
       }
     }
 
@@ -324,7 +328,7 @@ let cameraActive = false;
     let url = typeof input === 'string' ? input : (input instanceof URL ? input.href : input.url);
     if (MEDIAPIPE_ASSET_PATTERN.test(url) && !url.startsWith('chrome-extension')) {
       const filename = url.split('/').pop()?.split('?')[0];
-      return originalFetch.call(this, `chrome-extension://${EXT_ID}/dist/cv/${filename}`, init);
+      return originalFetch.call(this, `chrome-extension://${EXT_ID}/face_mesh/${filename}`, init);
     }
     return originalFetch.call(this, input, init);
   };
@@ -334,7 +338,7 @@ let cameraActive = false;
     const urlStr = url.toString();
     if (MEDIAPIPE_ASSET_PATTERN.test(urlStr) && !urlStr.startsWith('chrome-extension')) {
       const filename = urlStr.split('/').pop()?.split('?')[0];
-      const redirectedUrl = `chrome-extension://${EXT_ID}/dist/cv/${filename}`;
+      const redirectedUrl = `chrome-extension://${EXT_ID}/face_mesh/${filename}`;
       Object.defineProperty(this, 'onprogress', { get: () => null, set: () => {}, configurable: true });
       return originalOpen.apply(this, [method, redirectedUrl, ...rest] as any);
     }

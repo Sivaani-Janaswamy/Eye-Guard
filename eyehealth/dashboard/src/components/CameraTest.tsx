@@ -1,90 +1,60 @@
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '@extension/db/db';
 
-// TypeScript declaration for global FaceMesh loaded via CDN
-declare global {
-  interface Window {
-    FaceMesh: any;
-  }
-}
-
-interface Stats {
-  faceDetected: boolean;
+interface LiveStats {
+  id: number;
   distanceCm: number;
   blinkRate: number;
   lux: number;
+  faceDetected: boolean;
   updatedAt: number;
-  landmarks: number[][];
+  confidence?: number;
 }
-
-// Load FaceMesh script from CDN
-const loadFaceMeshScript = (): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (window.FaceMesh) {
-      resolve();
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = '/face_mesh/face_mesh.js';
-    console.log('[CameraTest] Loading FaceMesh from:', script.src);
-    script.crossOrigin = 'anonymous';
-    script.onload = async () => {
-      // Wait for window.FaceMesh to be available (up to 2 seconds)
-      let attempts = 0;
-      const maxAttempts = 20;
-      const interval = 100;
-
-      while (!window.FaceMesh && attempts < maxAttempts) {
-        await new Promise(r => setTimeout(r, interval));
-        attempts++;
-      }
-
-      if (window.FaceMesh) {
-        resolve();
-      } else {
-        reject(new Error('FaceMesh not available after script load'));
-      }
-    };
-    script.onerror = (err) => {
-      console.error('[CameraTest] Failed to load FaceMesh script from:', script.src, err);
-      reject(new Error(`Failed to load FaceMesh from ${script.src}`));
-    };
-    document.head.appendChild(script);
-  });
-};
 
 function CameraTest() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animRef = useRef<number | null>(null);
-
   const [camStatus, setCamStatus] = useState<'off' | 'starting' | 'on'>('off');
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [fps, setFps] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
 
-  const blinkTimestamps = useRef<number[]>([]);
-  const isBlinking = useRef(false);
-  const lastFpsTime = useRef(Date.now());
-  const frameCount = useRef(0);
+  // FPS tracking for live_stats updates
+  const updateCountRef = useRef(0);
+  const [dataFps, setDataFps] = useState(0);
+  const lastFpsTimeRef = useRef(Date.now());
 
-  // FaceMesh instance ref for proper lifecycle management
-  const faceMeshRef = useRef<any>(null);
-  const isLoopRunning = useRef(false);
-  const lastFrameSend = useRef(0);
+  // Read live_stats from IndexedDB (written by extension main-world.ts)
+  const liveStats = useLiveQuery<LiveStats | null>(
+    () => db.table('live_stats').get(1).catch(() => null),
+    []
+  );
+
+  // Track update rate
+  useEffect(() => {
+    if (liveStats) {
+      updateCountRef.current++;
+      const now = Date.now();
+      if (now - lastFpsTimeRef.current >= 1000) {
+        setDataFps(updateCountRef.current);
+        updateCountRef.current = 0;
+        lastFpsTimeRef.current = now;
+      }
+    }
+  }, [liveStats]);
 
   // ----------- CAMERA START -----------
   const startCamera = useCallback(async () => {
     setCamStatus('starting');
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 640, height: 480 }
-    });
-
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
-      setCamStatus('on');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 }
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        setCamStatus('on');
+      }
+    } catch (err) {
+      console.error('[CameraTest] Failed to start camera:', err);
+      setCamStatus('off');
     }
   }, []);
 
@@ -95,234 +65,62 @@ function CameraTest() {
       (video.srcObject as MediaStream).getTracks().forEach(t => t.stop());
       video.srcObject = null;
     }
-
-    // Stop animation loop
-    isLoopRunning.current = false;
-    if (animRef.current) {
-      cancelAnimationFrame(animRef.current);
-      animRef.current = null;
-    }
-
-    // Close FaceMesh instance
-    if (faceMeshRef.current) {
-      faceMeshRef.current.close();
-      faceMeshRef.current = null;
-    }
-
-    // Reset blink tracking
-    blinkTimestamps.current = [];
-    isBlinking.current = false;
-
-    setStats(null);
-    setFps(0);
     setCamStatus('off');
   }, []);
 
-  // ----------- FACE MESH LOGIC -----------
-  useEffect(() => {
-    if (camStatus !== 'on') return;
+  // ----------- DERIVED STATE -----------
+  const isStale = !liveStats || (Date.now() - liveStats.updatedAt) > 5000;
+  const hasData = liveStats && !isStale;
+  const faceDetected = hasData && liveStats.faceDetected;
 
-    // Prevent duplicate initialization
-    if (faceMeshRef.current) {
-      console.log('[CameraTest] FaceMesh already initialized, skipping');
-      return;
-    }
+  // Color helpers
+  const getDistanceColor = () => {
+    if (!faceDetected) return 'text-gray-400';
+    const d = liveStats!.distanceCm;
+    if (d < 50) return 'text-amber-400'; // Too close
+    if (d <= 70) return 'text-green-400'; // Good
+    return 'text-blue-400'; // Far
+  };
 
-    let isMounted = true;
+  const getBlinkColor = () => {
+    if (!faceDetected) return 'text-gray-400';
+    const b = liveStats!.blinkRate;
+    if (b < 15) return 'text-amber-400'; // Too low
+    return 'text-green-400';
+  };
 
-    const initFaceMesh = async () => {
-      try {
-        setIsLoading(true);
-        await loadFaceMeshScript();
+  const getLuxColor = () => {
+    if (!hasData) return 'text-gray-400';
+    const l = liveStats!.lux;
+    if (l < 50) return 'text-amber-400'; // Too dark
+    return 'text-green-400';
+  };
 
-        if (!isMounted || !window.FaceMesh) return;
-
-        const faceMesh = new window.FaceMesh({
-          locateFile: (file: string) => {
-            const path = `/face_mesh/${file}`;
-            console.log('[CameraTest] FaceMesh locating file:', file, '->', path);
-            return path;
-          }
-        });
-
-        faceMeshRef.current = faceMesh;
-
-        faceMesh.setOptions({
-          maxNumFaces: 1,
-          refineLandmarks: true,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5
-        });
-
-        faceMesh.onResults((results: any) => {
-          const now = Date.now();
-
-          if (!results.multiFaceLandmarks?.length) {
-            setStats({
-              faceDetected: false,
-              distanceCm: 0,
-              blinkRate: blinkTimestamps.current.length,
-              lux: 0,
-              updatedAt: now,
-              landmarks: []
-            });
-            return;
-          }
-
-          const lm = results.multiFaceLandmarks[0];
-
-          // -------- DISTANCE --------
-          const dx = (lm[263].x - lm[33].x) * 640;
-          const dy = (lm[263].y - lm[33].y) * 480;
-          const pixelDist = Math.sqrt(dx * dx + dy * dy);
-          const distanceCm = Math.min(200, Math.max(15, (6.3 * 600) / pixelDist));
-
-          // -------- BLINK --------
-          const computeEAR = (a: number, b: number, c: number, d: number, e: number, f: number) => {
-            const dist = (p1: any, p2: any) =>
-              Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
-
-            const v1 = dist(lm[b], lm[f]);
-            const v2 = dist(lm[c], lm[e]);
-            const h = dist(lm[a], lm[d]);
-
-            return (v1 + v2) / (2 * h);
-          };
-
-          const ear =
-            (computeEAR(33, 160, 158, 133, 153, 144) +
-              computeEAR(362, 385, 387, 263, 373, 380)) /
-            2;
-
-          if (ear < 0.18 && !isBlinking.current) {
-            isBlinking.current = true;
-            blinkTimestamps.current.push(now);
-          } else if (ear > 0.18) {
-            isBlinking.current = false;
-          }
-
-          // keep last 60s
-          blinkTimestamps.current = blinkTimestamps.current.filter(
-            t => now - t < 60000
-          );
-
-          // -------- LUX --------
-          let lux = 0;
-          try {
-            const ctx = canvasRef.current?.getContext('2d');
-            if (ctx && videoRef.current) {
-              ctx.drawImage(videoRef.current, 0, 0, 40, 30);
-              const data = ctx.getImageData(0, 0, 40, 30).data;
-              let sum = 0;
-              for (let i = 0; i < data.length; i += 16) {
-                sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
-              }
-              lux = Math.round((sum / (data.length / 16)) / 255 * 500);
-            }
-          } catch {}
-
-          setStats({
-            faceDetected: true,
-            distanceCm: Math.round(distanceCm),
-            blinkRate: blinkTimestamps.current.length,
-            lux,
-            updatedAt: now,
-            landmarks: lm.map((p: any) => [p.x, p.y])
-          });
-        });
-
-        // Throttled loop at ~30 FPS (33ms between frames)
-        const loop = async () => {
-          if (!isLoopRunning.current) return;
-
-          const video = videoRef.current;
-          const now = Date.now();
-
-          // Throttle: only send every 33ms (~30 FPS)
-          if (video && video.readyState >= 2 && now - lastFrameSend.current >= 33) {
-            try {
-              lastFrameSend.current = now;
-              await faceMesh.send({ image: video });
-            } catch (err) {
-              console.warn('[CameraTest] FaceMesh send error:', err);
-            }
-          }
-
-          frameCount.current++;
-
-          if (now - lastFpsTime.current >= 1000) {
-            setFps(frameCount.current);
-            frameCount.current = 0;
-            lastFpsTime.current = now;
-          }
-
-          if (isLoopRunning.current) {
-            animRef.current = requestAnimationFrame(loop);
-          }
-        };
-
-        // Start loop only if not already running
-        if (!isLoopRunning.current) {
-          isLoopRunning.current = true;
-          lastFrameSend.current = 0;
-          loop();
-        }
-
-        setIsLoading(false);
-      } catch (err) {
-        console.error('[CameraTest] Failed to initialize FaceMesh:', err);
-        setIsLoading(false);
-      }
-    };
-
-    initFaceMesh();
-
-    return () => {
-      isMounted = false;
-      isLoopRunning.current = false;
-      if (animRef.current) {
-        cancelAnimationFrame(animRef.current);
-        animRef.current = null;
-      }
-      if (faceMeshRef.current) {
-        faceMeshRef.current.close();
-        faceMeshRef.current = null;
-      }
-    };
-  }, [camStatus]);
-
-  // ----------- DRAW LANDMARKS ON CANVAS -----------
-  useEffect(() => {
-    if (!canvasRef.current || !stats?.landmarks?.length) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw landmarks as small circles
-    ctx.fillStyle = '#00ff00';
-    const radius = 2;
-
-    for (const point of stats.landmarks) {
-      const x = point[0] * canvas.width;
-      const y = point[1] * canvas.height;
-
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }, [stats?.landmarks]);
+  const getAgeColor = () => {
+    if (!liveStats) return 'text-gray-400';
+    const age = Date.now() - liveStats.updatedAt;
+    if (age > 3000) return 'text-red-400';
+    if (age > 1000) return 'text-amber-400';
+    return 'text-green-400';
+  };
 
   // ----------- RENDER -----------
   return (
     <div className="glassmorphism p-6 rounded-2xl">
-      <h3 className="text-lg font-semibold text-white mb-4">Camera Diagnostics (Isolated)</h3>
+      <h3 className="text-lg font-semibold text-white mb-4">Camera Diagnostics</h3>
+
+      {/* Warning when camera is on but no data */}
+      {camStatus === 'on' && isStale && (
+        <div className="mb-4 p-3 bg-amber-500/20 border border-amber-500/40 rounded-lg">
+          <p className="text-amber-200 text-sm">
+            Camera preview is on but the extension is not sending data.
+            Make sure you have a webpage open with EyeGuard active.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left: Video + Canvas Overlay */}
+        {/* Left: Video Preview */}
         <div className="flex flex-col gap-4">
           <div className="relative w-fit">
             <video
@@ -331,14 +129,27 @@ function CameraTest() {
               muted
               playsInline
               className="rounded-lg"
-              style={{ width: 320, height: 240, backgroundColor: '#000' }}
+              style={{
+                width: 320,
+                height: 240,
+                backgroundColor: '#000',
+                transform: 'scaleX(-1)' // Mirror for natural feel
+              }}
             />
-            <canvas
-              ref={canvasRef}
-              width={320}
-              height={240}
-              className="absolute top-0 left-0 rounded-lg pointer-events-none"
-            />
+            {/* FPS Badge */}
+            <div className="absolute top-2 right-2 px-2 py-1 bg-black/60 rounded text-xs text-white font-mono">
+              {dataFps} fps
+            </div>
+            {/* Status Badge */}
+            <div className={`absolute bottom-2 left-2 px-2 py-1 rounded text-xs font-medium ${
+              faceDetected ? 'bg-green-500/80 text-white' :
+                hasData ? 'bg-amber-500/80 text-white' :
+                  'bg-gray-500/80 text-white'
+            }`}>
+              {faceDetected ? 'Face detected ✓' :
+                hasData ? 'No face in frame' :
+                  'Extension not active'}
+            </div>
           </div>
 
           <div className="flex gap-2">
@@ -347,49 +158,80 @@ function CameraTest() {
                 onClick={startCamera}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
               >
-                Start
+                Start Camera
               </button>
             ) : (
               <button
                 onClick={stopCamera}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
               >
-                Stop
+                Stop Camera
               </button>
             )}
           </div>
         </div>
 
-        {/* Right: Stats */}
+        {/* Right: Stats Grid */}
         <div className="flex flex-col justify-center">
-          {stats ? (
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-white/60">Face:</span>
-                <span className={stats.faceDetected ? 'text-green-400' : 'text-red-400'}>
-                  {stats.faceDetected ? 'Yes' : 'No'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">Distance:</span>
-                <span className="text-white font-medium">{stats.distanceCm} cm</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">Blinks/min:</span>
-                <span className="text-white font-medium">{stats.blinkRate}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">Light:</span>
-                <span className="text-white font-medium">{stats.lux} lux</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">FPS:</span>
-                <span className="text-white font-medium">{fps}</span>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Distance */}
+            <div className="p-3 bg-white/5 rounded-lg">
+              <div className="text-white/50 text-xs mb-1">Distance</div>
+              <div className={`text-lg font-semibold ${getDistanceColor()}`}>
+                {faceDetected ? `${liveStats!.distanceCm} cm` : '—'}
               </div>
             </div>
-          ) : (
-            <div className="text-white/40 text-sm italic">Face detection unavailable</div>
-          )}
+
+            {/* Blink Rate */}
+            <div className="p-3 bg-white/5 rounded-lg">
+              <div className="text-white/50 text-xs mb-1">Blink Rate</div>
+              <div className={`text-lg font-semibold ${getBlinkColor()}`}>
+                {faceDetected ? `${liveStats!.blinkRate} /min` : '—'}
+              </div>
+            </div>
+
+            {/* Lighting */}
+            <div className="p-3 bg-white/5 rounded-lg">
+              <div className="text-white/50 text-xs mb-1">Lighting</div>
+              <div className={`text-lg font-semibold ${getLuxColor()}`}>
+                {hasData ? `${liveStats!.lux} lux` : '—'}
+              </div>
+            </div>
+
+            {/* Confidence */}
+            <div className="p-3 bg-white/5 rounded-lg">
+              <div className="text-white/50 text-xs mb-1">Confidence</div>
+              <div className={`text-lg font-semibold ${faceDetected ? 'text-green-400' : 'text-gray-400'}`}>
+                {faceDetected && liveStats!.confidence !== undefined
+                  ? `${Math.round(liveStats!.confidence * 100)}%`
+                  : '—'}
+              </div>
+            </div>
+
+            {/* Data Age */}
+            <div className="p-3 bg-white/5 rounded-lg">
+              <div className="text-white/50 text-xs mb-1">Data Age</div>
+              <div className={`text-lg font-semibold ${getAgeColor()}`}>
+                {liveStats
+                  ? `${Math.round((Date.now() - liveStats.updatedAt) / 1000)}s ago`
+                  : '—'}
+              </div>
+            </div>
+
+            {/* Status */}
+            <div className="p-3 bg-white/5 rounded-lg">
+              <div className="text-white/50 text-xs mb-1">Status</div>
+              <div className={`text-sm font-medium ${
+                faceDetected ? 'text-green-400' :
+                  hasData ? 'text-amber-400' :
+                    'text-gray-400'
+              }`}>
+                {faceDetected ? 'Face detected ✓' :
+                  hasData ? 'No face in frame' :
+                    'Extension not active'}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
