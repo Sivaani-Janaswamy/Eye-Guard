@@ -24,7 +24,8 @@ export function PredictionCard({ prediction }: { prediction: PredictionResult })
     );
   }
 
-  const confidencePct = Math.round(prediction.confidence * 100);
+  // confidence is a string label from confidenceLabel() function
+  const confidenceLabel = prediction.confidence as unknown as string;
 
   return (
     <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-lg)' }} className="p-6 flex flex-col h-full gap-6">
@@ -42,10 +43,10 @@ export function PredictionCard({ prediction }: { prediction: PredictionResult })
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '2px' }}>Confidence</div>
           <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '6px' }}>
-            {confidencePct > 70 ? 'High certainty' : confidencePct > 40 ? 'Early estimate' : 'Developing'}
+            {confidenceLabel}
           </div>
           <div style={{ height: '5px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ height: '100%', borderRadius: '3px', width: `${confidencePct}%`, background: confidencePct > 70 ? 'var(--green-text)' : 'var(--amber-text)' }}></div>
+            <div style={{ height: '100%', borderRadius: '3px', width: '100%', background: 'var(--amber-text)' }}></div>
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { CORRECTION_PRESETS } from '@extension/correction/display-corrector';
 
 export function CorrectionPanel() {
   const [profile, setProfile] = useState<StoredCorrectionProfile | null>(null);
+  const [appliedPreset, setAppliedPreset] = useState<string | null>(null);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -18,11 +19,22 @@ export function CorrectionPanel() {
     loadProfile();
   }, []);
 
+  useEffect(() => {
+    if (appliedPreset) {
+      const timer = setTimeout(() => setAppliedPreset(null), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [appliedPreset]);
+
   const handleUpdate = async (key: keyof CorrectionProfile, value: number) => {
     if (!profile) return;
     const newProfile = { ...profile, [key]: value, activePreset: "custom" as const };
     setProfile(newProfile);
     await db.correction.put(newProfile);
+    chrome.runtime.sendMessage({
+      type: 'APPLY_CORRECTION',
+      profile: newProfile
+    });
   };
 
   const handlePreset = async (presetId: "off" | "office" | "night") => {
@@ -30,6 +42,11 @@ export function CorrectionPanel() {
     const newProfile = { ...profile, ...CORRECTION_PRESETS[presetId] };
     setProfile(newProfile);
     await db.correction.put(newProfile);
+    chrome.runtime.sendMessage({
+      type: 'APPLY_CORRECTION',
+      profile: newProfile
+    });
+    setAppliedPreset(presetId);
   };
 
   if (!profile) return null;
@@ -63,6 +80,13 @@ export function CorrectionPanel() {
           </button>
         ))}
       </div>
+
+      {appliedPreset && (
+        <div className="mb-4 flex items-center gap-2">
+          <span className="badge badge-green text-[10px] px-2 py-1">Applied</span>
+          <span className="text-[11px] text-white/50 capitalize">{appliedPreset} preset active</span>
+        </div>
+      )}
 
       <div className="space-y-6 flex-1">
         <SliderControl 

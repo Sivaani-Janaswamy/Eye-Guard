@@ -5,6 +5,8 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
  * Runs AI processing directly in the webpage context for maximum stability.
  */
 (function() {
+  const DEBUG = false;
+
   const EXT_ID = document.currentScript?.getAttribute('data-ext-id');
   if (!EXT_ID) {
     console.error('[EyeGuard:main-world] Failed: Extension ID missing');
@@ -33,8 +35,8 @@ let cameraActive = false;
 
   // Constants
   const IPD_CM = 6.3;
-  const APPROX_FOCAL = 600;
-  const EAR_THRESHOLD = 0.18;
+  const APPROX_FOCAL = 550;
+  const EAR_THRESHOLD = 0.21;
 
   function computeAmbientLux(): number {
     if (!videoElement || !lightingCtx || videoElement.readyState < 2) return Math.round(smoothedLux || lastLux);
@@ -180,15 +182,17 @@ let cameraActive = false;
       const blinkRate = blinkTimestamps.length;
 
       // Logging
-      if (self._egFrameCount % 90 === 0) {
+      if (DEBUG && self._egFrameCount % 90 === 0) {
         console.log(`[DATA] values computed | dist: ${Math.round(distanceCm)}cm | blinkRate: ${blinkRate} | EAR: ${smoothEAR.toFixed(3)} | isBlinking: ${isBlinking}`);
       }
       
       // Log blink detection events
-      if (smoothEAR < EAR_THRESHOLD && !isBlinking) {
-        console.log(`[BLINK] Detected! EAR: ${smoothEAR.toFixed(3)} < ${EAR_THRESHOLD}, timestamps: ${blinkTimestamps.length}`);
-      } else if (smoothEAR > EAR_THRESHOLD && isBlinking) {
-        console.log(`[BLINK] Ended. EAR: ${smoothEAR.toFixed(3)} > ${EAR_THRESHOLD}`);
+      if (DEBUG) {
+        if (smoothEAR < EAR_THRESHOLD && !isBlinking) {
+          console.log(`[BLINK] Detected! EAR: ${smoothEAR.toFixed(3)} < ${EAR_THRESHOLD}, timestamps: ${blinkTimestamps.length}`);
+        } else if (smoothEAR > EAR_THRESHOLD && isBlinking) {
+          console.log(`[BLINK] Ended. EAR: ${smoothEAR.toFixed(3)} > ${EAR_THRESHOLD}`);
+        }
       }
 
       const lux = computeAmbientLux();
@@ -235,7 +239,7 @@ let cameraActive = false;
     if (videoElement && videoElement.readyState >= 2) {
       try {
         if (faceMesh) {
-          if (framesSent % 60 === 0) console.log('[MESH] processing frame');
+          if (DEBUG && framesSent % 60 === 0) console.log('[MESH] processing frame');
           await faceMesh.send({ image: videoElement });
           framesSent++;
         }
@@ -245,7 +249,7 @@ let cameraActive = false;
     }
 
     const now = Date.now();
-    if (now - lastFrameLog > 5000) {
+    if (DEBUG && now - lastFrameLog > 5000) {
       console.log('[DATA] frames sent to MediaPipe:', framesSent);
       framesSent = 0;
       lastFrameLog = now;
@@ -258,7 +262,7 @@ let cameraActive = false;
     if (animFrameId !== null) return; // already running
     isRunning = true;
     cameraActive = true;
-    console.log('[EyeGuard:main-world] Starting faceMesh send loop');
+    if (DEBUG) console.log('[EyeGuard:main-world] Starting faceMesh send loop');
     animFrameId = requestAnimationFrame(processFrame);
   }
 
@@ -269,7 +273,7 @@ let cameraActive = false;
       cancelAnimationFrame(animFrameId);
       animFrameId = null;
     }
-    console.log('[EyeGuard:main-world] Processing loop stopped');
+    if (DEBUG) console.log('[EyeGuard:main-world] Processing loop stopped');
   }
 
   // Monitor for video element
@@ -282,19 +286,21 @@ let cameraActive = false;
     ) as HTMLVideoElement;
     
     if (videoElement) {
-        if (videoElement.id === 'eyeguard-monitoring-video') {
-            console.log('[EyeGuard:main-world] monitoring video detected');
-        } else {
-            console.log('[EyeGuard:main-world] alternative video source detected');
+        if (DEBUG) {
+            if (videoElement.id === 'eyeguard-monitoring-video') {
+                console.log('[EyeGuard:main-world] monitoring video detected');
+            } else {
+                console.log('[EyeGuard:main-world] alternative video source detected');
+            }
         }
         
         const onMetadata = () => {
-            console.log('[EyeGuard:main-world] metadata loaded, playing...');
+            if (DEBUG) console.log('[EyeGuard:main-world] metadata loaded, playing...');
             videoElement!.play().then(() => {
-                console.log('[EyeGuard:main-world] Video playing, starting loop');
+                if (DEBUG) console.log('[EyeGuard:main-world] Video playing, starting loop');
                 startProcessingLoop();
             }).catch(e => {
-                console.warn('[EyeGuard:main-world] video.play() failed', e);
+                if (DEBUG) console.warn('[EyeGuard:main-world] video.play() failed', e);
                 startProcessingLoop();
             });
         };
@@ -341,5 +347,5 @@ let cameraActive = false;
     stopProcessingLoop
   };
 
-  console.log('[EyeGuard] Main-world engine active');
+  if (DEBUG) console.log('[EyeGuard] Main-world engine active');
 })();

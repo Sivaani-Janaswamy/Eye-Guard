@@ -27699,6 +27699,9 @@
           this.version(2).stores({
             live_stats: "id"
           });
+          this.version(3).stores({
+            session_data: "id, updatedAt"
+          });
         }
       };
     }

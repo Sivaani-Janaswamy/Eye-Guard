@@ -8,8 +8,28 @@ export function ScoreCard({ scoreData }: { scoreData: DailyEyeScore | null }) {
     return "badge-red";
   };
 
-  const score = scoreData?.score ?? 100;
-  const riskLabel = scoreData?.riskLevel ?? "low";
+  if (!scoreData) {
+    return (
+      <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)' }} className="p-6 rounded-2xl flex flex-col items-center gap-4 h-full justify-center">
+        <h3 className="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em]">Today's eye score</h3>
+        
+        <div className="flex flex-col items-center gap-2">
+          <SkeletonBox width="80px" height="64px" />
+          <SkeletonBox width="100px" height="24px" />
+        </div>
+
+        <div className="w-full grid grid-cols-2 gap-4 mt-4">
+          <SkeletonMiniMetric />
+          <SkeletonMiniMetric />
+          <SkeletonMiniMetric />
+          <SkeletonMiniMetric />
+        </div>
+      </div>
+    );
+  }
+
+  const score = scoreData.score;
+  const riskLabel = scoreData.riskLevel;
 
   return (
     <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)' }} className="p-6 rounded-2xl flex flex-col items-center gap-4 h-full justify-center">
@@ -28,11 +48,37 @@ export function ScoreCard({ scoreData }: { scoreData: DailyEyeScore | null }) {
       </div>
 
       <div className="w-full grid grid-cols-2 gap-4 mt-4">
-        <MiniMetric label="Screen" value={scoreData?.breakdown.screenTimeScore ?? 25} color="var(--amber-text)" />
-        <MiniMetric label="Distance" value={scoreData?.breakdown.distanceScore ?? 25} color="var(--green-text)" />
-        <MiniMetric label="Blinks" value={scoreData?.breakdown.blinkScore ?? 25} color="var(--red-text)" />
-        <MiniMetric label="Lighting" value={scoreData?.breakdown.lightingScore ?? 25} color="var(--green-text)" />
+        <MiniMetric label="Screen" value={scoreData.breakdown.screenTimeScore} color="var(--amber-text)" />
+        <MiniMetric label="Distance" value={scoreData.breakdown.distanceScore} color="var(--green-text)" />
+        <MiniMetric label="Blinks" value={scoreData.breakdown.blinkScore} color="var(--red-text)" />
+        <MiniMetric label="Lighting" value={scoreData.breakdown.lightingScore} color="var(--green-text)" />
       </div>
+    </div>
+  );
+}
+
+function SkeletonBox({ width, height }: { width: string; height: string }) {
+  return (
+    <div 
+      className="animate-pulse rounded-lg"
+      style={{ 
+        width, 
+        height, 
+        background: 'var(--border)',
+        animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+      }} 
+    />
+  );
+}
+
+function SkeletonMiniMetric() {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex justify-between">
+        <SkeletonBox width="40px" height="10px" />
+        <SkeletonBox width="20px" height="10px" />
+      </div>
+      <SkeletonBox width="100%" height="4px" />
     </div>
   );
 }

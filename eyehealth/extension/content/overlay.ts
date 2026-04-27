@@ -1,6 +1,8 @@
 import { AlertEvent } from "../db/schema";
 import { applyCorrection, removeCorrection } from "../correction/display-corrector";
 
+const DEBUG = false;
+
 // Unified State
 let unifiedToastElement: HTMLDivElement | null = null;
 let isMinimized = false;
@@ -726,13 +728,15 @@ window.addEventListener('message', (event) => {
       landmarks: frameData.landmarks
     }
   }).catch(() => {});
-  
-  console.log('[OVERLAY DEBUG] Forwarding SENSOR_FRAME', {
-    screenDistanceCm: frameData.screenDistanceCm,
-    blinkRate: frameData.blinkRate,
-    ambientLuxLevel: frameData.ambientLuxLevel,
-    faceDetected: frameData.faceDetected
-  });
+
+  if (DEBUG) {
+    console.log('[OVERLAY DEBUG] Forwarding SENSOR_FRAME', {
+      screenDistanceCm: frameData.screenDistanceCm,
+      blinkRate: frameData.blinkRate,
+      ambientLuxLevel: frameData.ambientLuxLevel,
+      faceDetected: frameData.faceDetected
+    });
+  }
 });
 
 // Centralized Alert Display

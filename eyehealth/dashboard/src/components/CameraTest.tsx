@@ -1,233 +1,94 @@
-import { useEffect, useRef, useState, useCallback, memo, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../../extension/db/db';
+import { useEffect, useRef, useState, useCallback, memo } from 'react';
 
-interface LiveStats {
+// TypeScript declaration for global FaceMesh loaded via CDN
+declare global {
+  interface Window {
+    FaceMesh: any;
+  }
+}
+
+interface Stats {
   faceDetected: boolean;
   distanceCm: number;
   blinkRate: number;
   lux: number;
   updatedAt: number;
-  // optional (not always present from SW)
-  confidence?: number;
-  landmarks?: number[][];
+  landmarks: number[][];
 }
 
-const FACE_OUTLINE = [
-  10,338,297,332,284,251,389,356,454,323,361,288,
-  397,365,379,378,400,377,152,148,176,149,150,136,
-  172,58,132,93,234,127,162,21,54,103,67,109,10
-];
+// Load FaceMesh script from CDN
+const loadFaceMeshScript = (): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (window.FaceMesh) {
+      resolve();
+      return;
+    }
 
-const LEFT_EYE = [362,382,381,380,374,373,390,249,263,466,388,387,386,385,384,398,362];
-const RIGHT_EYE = [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246,33];
-const LEFT_IRIS = [474,475,476,477,474];
-const RIGHT_IRIS = [469,470,471,472,469];
-const NOSE_BRIDGE = [168,6,197,195,5];
-const LIPS_OUTER = [61,146,91,181,84,17,314,405,321,375,291,409,270,269,267,0,37,39,40,185,61];
+    const script = document.createElement('script');
+    script.src = '/face_mesh/face_mesh.js';
+    console.log('[CameraTest] Loading FaceMesh from:', script.src);
+    script.crossOrigin = 'anonymous';
+    script.onload = async () => {
+      // Wait for window.FaceMesh to be available (up to 2 seconds)
+      let attempts = 0;
+      const maxAttempts = 20;
+      const interval = 100;
 
-function drawPath(
-  ctx: CanvasRenderingContext2D,
-  landmarks: number[][],
-  indices: number[],
-  close = false
-) {
-  ctx.beginPath();
-  indices.forEach((idx, i) => {
-    const pt = landmarks[idx];
-    if (!pt) return;
-    const [x, y] = pt;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+      while (!window.FaceMesh && attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, interval));
+        attempts++;
+      }
+
+      if (window.FaceMesh) {
+        resolve();
+      } else {
+        reject(new Error('FaceMesh not available after script load'));
+      }
+    };
+    script.onerror = (err) => {
+      console.error('[CameraTest] Failed to load FaceMesh script from:', script.src, err);
+      reject(new Error(`Failed to load FaceMesh from ${script.src}`));
+    };
+    document.head.appendChild(script);
   });
-  if (close) ctx.closePath();
-  ctx.stroke();
-}
-
-function drawLandmarks(
-  ctx: CanvasRenderingContext2D,
-  landmarks: number[][],
-  w: number,
-  h: number
-) {
-  const scaled = landmarks.map(pt => [pt[0] * w, pt[1] * h]);
-
-  ctx.clearRect(0, 0, w, h);
-
-  ctx.strokeStyle = 'rgba(0, 255, 170, 0.6)';
-  ctx.lineWidth = 1.5;
-  drawPath(ctx, scaled, FACE_OUTLINE, true);
-
-  ctx.strokeStyle = 'rgba(0, 200, 255, 0.8)';
-  drawPath(ctx, scaled, LEFT_EYE, true);
-  drawPath(ctx, scaled, RIGHT_EYE, true);
-
-  ctx.strokeStyle = 'rgba(100, 220, 255, 0.9)';
-  drawPath(ctx, scaled, LEFT_IRIS, true);
-  drawPath(ctx, scaled, RIGHT_IRIS, true);
-
-  ctx.strokeStyle = 'rgba(0, 255, 170, 0.4)';
-  drawPath(ctx, scaled, NOSE_BRIDGE);
-
-  ctx.strokeStyle = 'rgba(255, 100, 150, 0.7)';
-  drawPath(ctx, scaled, LIPS_OUTER, true);
-
-  const keyPoints = [1, 4, 9, 10, 152, 33, 263, 61, 291];
-  ctx.fillStyle = 'rgba(0, 255, 170, 0.9)';
-  keyPoints.forEach(idx => {
-    const pt = scaled[idx];
-    if (!pt) return;
-    ctx.beginPath();
-    ctx.arc(pt[0], pt[1], 2.5, 0, Math.PI * 2);
-    ctx.fill();
-  });
-}
+};
 
 function CameraTest() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number | null>(null);
-  const lastLandmarksRef = useRef<number[][] | null>(null);
-  const logFlags = useRef({ videoReady: false, lastLandmarkLog: 0, lastDrawLog: 0, lastFpsLog: 0, lastOverlayLog: 0 });
 
-  const [camStatus, setCamStatus] = useState<'off' | 'starting' | 'on' | 'error'>('off');
-  const [camError, setCamError] = useState('');
+  const [camStatus, setCamStatus] = useState<'off' | 'starting' | 'on'>('off');
+  const [stats, setStats] = useState<Stats | null>(null);
   const [fps, setFps] = useState(0);
-  
-  const fpsCountRef = useRef(0);
-  const lastFpsReset = useRef(Date.now());
-  const lastDisplayUpdateRef = useRef(0);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const [displayStats, setDisplayStats] = useState<LiveStats | null>(null);
-  const [debugMode, setDebugMode] = useState(false);
+  const blinkTimestamps = useRef<number[]>([]);
+  const isBlinking = useRef(false);
+  const lastFpsTime = useRef(Date.now());
+  const frameCount = useRef(0);
 
-  // 1. Initial load from DB
-  useEffect(() => {
-    db.table('live_stats').get(1).then(stats => {
-      if (stats) setDisplayStats(stats);
-    });
-  }, []);
+  // FaceMesh instance ref for proper lifecycle management
+  const faceMeshRef = useRef<any>(null);
+  const isLoopRunning = useRef(false);
+  const lastFrameSend = useRef(0);
 
-  // 2. Real-time stream via messaging
-  useEffect(() => {
-    const listener = (message: any) => {
-      if (message.type === 'LIVE_STATS_UPDATE') {
-        console.log('[STATS UPDATE] Received live data');
-        setDisplayStats(message.payload);
-      }
-    };
-    chrome.runtime.onMessage.addListener(listener);
-    return () => chrome.runtime.onMessage.removeListener(listener);
-  }, []);
-
-  // ---------------- LANDMARKS SYNC ----------------
-  useEffect(() => {
-    // Only update landmarks for the overlay if the local camera is active
-    if (camStatus !== 'on') return;
-
-    const landmarks = displayStats?.landmarks;
-    if (landmarks && landmarks.length > 0) {
-      lastLandmarksRef.current = landmarks;
-      if (Date.now() - logFlags.current.lastLandmarkLog > 2000) {
-        console.log(`[LANDMARKS] Received: exists=true, points=${landmarks.length}`);
-        logFlags.current.lastLandmarkLog = Date.now();
-      }
-    } else if (displayStats && Date.now() - logFlags.current.lastLandmarkLog > 2000) {
-      console.warn("No landmarks received from LIVE_STATS_UPDATE (using last known)");
-      logFlags.current.lastLandmarkLog = Date.now();
-    }
-  }, [displayStats, camStatus]);
-
-  // ---------------- FPS TRACKING ----------------
-  useEffect(() => {
-    if (!displayStats || camStatus !== 'on') return;
-
-    fpsCountRef.current++;
-    const now = Date.now();
-    if (now - lastFpsReset.current >= 1000) {
-      const currentFps = fpsCountRef.current;
-      setFps(currentFps);
-      console.log(`[FPS] Current rate: ${currentFps}`);
-      fpsCountRef.current = 0;
-      lastFpsReset.current = now;
-    }
-  }, [displayStats?.updatedAt, camStatus]);
-
-  // ---------------- DRAW LOOP ----------------
-  useEffect(() => {
-    if (camStatus !== 'on') {
-      console.log('[LOOP STOP] Camera is off');
-      const ctx = canvasRef.current?.getContext('2d');
-      if (ctx) ctx.clearRect(0, 0, canvasRef.current?.width || 0, canvasRef.current?.height || 0);
-      return;
-    }
-
-    console.log('[LOOP START] Initializing render loop');
-    function drawLoop() {
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-
-      if (canvas && video && video.readyState >= 2) {
-        if (!logFlags.current.videoReady) {
-          console.log('[VIDEO] Video element ready (readyState >= 2)');
-          logFlags.current.videoReady = true;
-        }
-
-        // Sync canvas internal resolution to video source resolution
-        const w = video.videoWidth;
-        const h = video.videoHeight;
-
-        if (canvas.width !== w || canvas.height !== h) {
-          canvas.width = w;
-          canvas.height = h;
-        }
-
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          if (lastLandmarksRef.current && camStatus === 'on') {
-            drawLandmarks(ctx, lastLandmarksRef.current, w, h);
-          } else {
-            ctx.clearRect(0, 0, w, h);
-          }
-        }
-      }
-
-      animRef.current = requestAnimationFrame(drawLoop);
-    }
-
-    animRef.current = requestAnimationFrame(drawLoop);
-    return () => {
-      if (animRef.current !== null) {
-        console.log('[LOOP STOP] Cleaning up animation frame');
-        cancelAnimationFrame(animRef.current);
-        animRef.current = null;
-      }
-    };
-  }, [camStatus]);
-
-  // ---------------- CAMERA ----------------
+  // ----------- CAMERA START -----------
   const startCamera = useCallback(async () => {
     setCamStatus('starting');
-    setCamError('');
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'user' }
-      });
-      console.log('[CAM] Permission granted, camera stream started');
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480 }
+    });
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setCamStatus('on');
-      }
-    } catch (err: any) {
-      setCamStatus('error');
-      setCamError(err?.message ?? 'Camera failed');
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+      setCamStatus('on');
     }
   }, []);
 
-
+  // ----------- CAMERA STOP -----------
   const stopCamera = useCallback(() => {
     const video = videoRef.current;
     if (video?.srcObject) {
@@ -235,220 +96,299 @@ function CameraTest() {
       video.srcObject = null;
     }
 
-    lastLandmarksRef.current = null;
-    setCamStatus('off');
+    // Stop animation loop
+    isLoopRunning.current = false;
+    if (animRef.current) {
+      cancelAnimationFrame(animRef.current);
+      animRef.current = null;
+    }
+
+    // Close FaceMesh instance
+    if (faceMeshRef.current) {
+      faceMeshRef.current.close();
+      faceMeshRef.current = null;
+    }
+
+    // Reset blink tracking
+    blinkTimestamps.current = [];
+    isBlinking.current = false;
+
+    setStats(null);
     setFps(0);
+    setCamStatus('off');
   }, []);
 
-  // ---------------- STATE ----------------
-  const isStale = displayStats ? Date.now() - displayStats.updatedAt > 5000 : true;
-  const hasLiveData = !!displayStats && !isStale;
+  // ----------- FACE MESH LOGIC -----------
+  useEffect(() => {
+    if (camStatus !== 'on') return;
 
-  const statusColor = !hasLiveData
-    ? { bg: '#F1EFE8', text: '#5F5E5A' }
-    : displayStats.faceDetected
-    ? { bg: '#EAF3DE', text: '#27500A' }
-    : { bg: '#FCEBEB', text: '#791F1F' };
-
-  const metrics = [
-    {
-      label: 'Distance',
-      value: hasLiveData ? `${displayStats.distanceCm} cm` : '—',
-      warn: hasLiveData && displayStats.distanceCm < 50
-    },
-    {
-      label: 'Blink rate',
-      value: hasLiveData ? `${displayStats.blinkRate} /min` : '—',
-      warn: hasLiveData && displayStats.blinkRate < 15
-    },
-    {
-      label: 'Lighting',
-      value: hasLiveData ? `${displayStats.lux} lux` : '—',
-      warn: hasLiveData && displayStats.lux < 50
-    },
-    {
-      label: 'Confidence',
-      value: hasLiveData && displayStats.confidence != null
-        ? `${Math.round(displayStats.confidence * 100)}%`
-        : '—',
-      warn: hasLiveData && displayStats.confidence != null && displayStats.confidence < 0.6
-    },
-    {
-      label: 'FPS',
-      value: fps || '—',
-      warn: camStatus === 'on' && fps > 0 && fps < 3
-    },
-    {
-      label: 'Data age',
-      value: hasLiveData
-        ? `${Math.round((Date.now() - displayStats.updatedAt) / 1000)}s`
-        : '—',
-      warn: !hasLiveData
+    // Prevent duplicate initialization
+    if (faceMeshRef.current) {
+      console.log('[CameraTest] FaceMesh already initialized, skipping');
+      return;
     }
-  ];
 
-  // ---------------- OPTIONAL DEBUG MODE ----------------
-  // Debug information display
-  const debugInfo = useMemo(() => {
-    if (!debugMode) return null;
-    
-    return {
-      fps: fps,
-      dataAge: displayStats ? Math.round((Date.now() - displayStats.updatedAt) / 1000) : null,
-      writeFrequency: '3 FPS (333ms)',
-      hasLiveData,
-      camStatus,
-      landmarksCount: displayStats?.landmarks?.length || 0
+    let isMounted = true;
+
+    const initFaceMesh = async () => {
+      try {
+        setIsLoading(true);
+        await loadFaceMeshScript();
+
+        if (!isMounted || !window.FaceMesh) return;
+
+        const faceMesh = new window.FaceMesh({
+          locateFile: (file: string) => {
+            const path = `/face_mesh/${file}`;
+            console.log('[CameraTest] FaceMesh locating file:', file, '->', path);
+            return path;
+          }
+        });
+
+        faceMeshRef.current = faceMesh;
+
+        faceMesh.setOptions({
+          maxNumFaces: 1,
+          refineLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+
+        faceMesh.onResults((results: any) => {
+          const now = Date.now();
+
+          if (!results.multiFaceLandmarks?.length) {
+            setStats({
+              faceDetected: false,
+              distanceCm: 0,
+              blinkRate: blinkTimestamps.current.length,
+              lux: 0,
+              updatedAt: now,
+              landmarks: []
+            });
+            return;
+          }
+
+          const lm = results.multiFaceLandmarks[0];
+
+          // -------- DISTANCE --------
+          const dx = (lm[263].x - lm[33].x) * 640;
+          const dy = (lm[263].y - lm[33].y) * 480;
+          const pixelDist = Math.sqrt(dx * dx + dy * dy);
+          const distanceCm = Math.min(200, Math.max(15, (6.3 * 600) / pixelDist));
+
+          // -------- BLINK --------
+          const computeEAR = (a: number, b: number, c: number, d: number, e: number, f: number) => {
+            const dist = (p1: any, p2: any) =>
+              Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+
+            const v1 = dist(lm[b], lm[f]);
+            const v2 = dist(lm[c], lm[e]);
+            const h = dist(lm[a], lm[d]);
+
+            return (v1 + v2) / (2 * h);
+          };
+
+          const ear =
+            (computeEAR(33, 160, 158, 133, 153, 144) +
+              computeEAR(362, 385, 387, 263, 373, 380)) /
+            2;
+
+          if (ear < 0.18 && !isBlinking.current) {
+            isBlinking.current = true;
+            blinkTimestamps.current.push(now);
+          } else if (ear > 0.18) {
+            isBlinking.current = false;
+          }
+
+          // keep last 60s
+          blinkTimestamps.current = blinkTimestamps.current.filter(
+            t => now - t < 60000
+          );
+
+          // -------- LUX --------
+          let lux = 0;
+          try {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (ctx && videoRef.current) {
+              ctx.drawImage(videoRef.current, 0, 0, 40, 30);
+              const data = ctx.getImageData(0, 0, 40, 30).data;
+              let sum = 0;
+              for (let i = 0; i < data.length; i += 16) {
+                sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+              }
+              lux = Math.round((sum / (data.length / 16)) / 255 * 500);
+            }
+          } catch {}
+
+          setStats({
+            faceDetected: true,
+            distanceCm: Math.round(distanceCm),
+            blinkRate: blinkTimestamps.current.length,
+            lux,
+            updatedAt: now,
+            landmarks: lm.map((p: any) => [p.x, p.y])
+          });
+        });
+
+        // Throttled loop at ~30 FPS (33ms between frames)
+        const loop = async () => {
+          if (!isLoopRunning.current) return;
+
+          const video = videoRef.current;
+          const now = Date.now();
+
+          // Throttle: only send every 33ms (~30 FPS)
+          if (video && video.readyState >= 2 && now - lastFrameSend.current >= 33) {
+            try {
+              lastFrameSend.current = now;
+              await faceMesh.send({ image: video });
+            } catch (err) {
+              console.warn('[CameraTest] FaceMesh send error:', err);
+            }
+          }
+
+          frameCount.current++;
+
+          if (now - lastFpsTime.current >= 1000) {
+            setFps(frameCount.current);
+            frameCount.current = 0;
+            lastFpsTime.current = now;
+          }
+
+          if (isLoopRunning.current) {
+            animRef.current = requestAnimationFrame(loop);
+          }
+        };
+
+        // Start loop only if not already running
+        if (!isLoopRunning.current) {
+          isLoopRunning.current = true;
+          lastFrameSend.current = 0;
+          loop();
+        }
+
+        setIsLoading(false);
+      } catch (err) {
+        console.error('[CameraTest] Failed to initialize FaceMesh:', err);
+        setIsLoading(false);
+      }
     };
-  }, [debugMode, fps, displayStats, hasLiveData, camStatus]);
 
-  const minDist = 20;
-  const maxDist = 80;
-  const distanceCm = displayStats?.distanceCm || 50;
+    initFaceMesh();
 
-  const normalized = Math.min(1, Math.max(0, (distanceCm - minDist) / (maxDist - minDist)));
-  const faceLeftPct = 10 + normalized * 70; // Map to 10% - 80% range
-  const lineWidthPct = Math.max(0, 88 - faceLeftPct);
+    return () => {
+      isMounted = false;
+      isLoopRunning.current = false;
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+      if (faceMeshRef.current) {
+        faceMeshRef.current.close();
+        faceMeshRef.current = null;
+      }
+    };
+  }, [camStatus]);
 
-  if (camStatus === 'on' && Date.now() - logFlags.current.lastOverlayLog > 5000) {
-    console.log('[OVERLAY] Rendering active stats overlay');
-    logFlags.current.lastOverlayLog = Date.now();
-  }
+  // ----------- DRAW LANDMARKS ON CANVAS -----------
+  useEffect(() => {
+    if (!canvasRef.current || !stats?.landmarks?.length) return;
 
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw landmarks as small circles
+    ctx.fillStyle = '#00ff00';
+    const radius = 2;
+
+    for (const point of stats.landmarks) {
+      const x = point[0] * canvas.width;
+      const y = point[1] * canvas.height;
+
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }, [stats?.landmarks]);
+
+  // ----------- RENDER -----------
   return (
-    <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-lg)' }} className="p-6 flex flex-col gap-6">
-      <div className="flex justify-between items-center">
-        <h3 style={{ color: 'var(--text-secondary)' }} className="text-xs font-semibold uppercase tracking-wider">
-          Camera Diagnostics
-        </h3>
-        <div className="flex gap-2">
-          {camStatus === 'off' ? (
-            <button onClick={startCamera} style={{ background: 'var(--text-primary)', color: 'var(--bg-primary)' }} className="text-xs px-3 py-1.5 rounded-lg transition font-bold shadow-sm">
-              Start Camera
-            </button>
-          ) : (
-            <button onClick={stopCamera} style={{ background: 'var(--red-bg)', color: 'var(--red-text)', border: '0.5px solid var(--border)' }} className="text-xs px-3 py-1.5 rounded-lg transition font-bold">
-              Stop Camera
-            </button>
-          )}
-          {/* Debug Mode Toggle */}
-          <button 
-            onClick={() => setDebugMode(!debugMode)} 
-            style={{ 
-              background: debugMode ? 'var(--amber-bg)' : 'var(--bg-secondary)', 
-              color: debugMode ? 'var(--amber-text)' : 'var(--text-secondary)', 
-              border: '0.5px solid var(--border)' 
-            }} 
-            className="text-xs px-2 py-1 rounded transition font-bold"
-          >
-            {debugMode ? 'Debug ON' : 'Debug OFF'}
-          </button>
-        </div>
-      </div>
+    <div className="glassmorphism p-6 rounded-2xl">
+      <h3 className="text-lg font-semibold text-white mb-4">Camera Diagnostics (Isolated)</h3>
 
-      {/* Main split container */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Left Section: Camera Feed (~60%) */}
-        <div style={{ 
-          flex: '1.5',
-          background: 'var(--bg-secondary)', 
-          borderRadius: 'var(--radius-md)', 
-          position: 'relative', 
-          overflow: 'hidden',
-          aspectRatio: '4/3',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <video 
-            ref={videoRef} 
-            id="eyeguard-video" 
-            autoPlay 
-            muted 
-            playsInline 
-            style={{ 
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: camStatus === 'on' ? 'block' : 'none'
-            }} 
-          />
-          <canvas
-            ref={canvasRef}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              pointerEvents: 'none',
-              zIndex: 10
-            }}
-          />
-          
-          {camStatus !== 'on' && (
-            <div style={{ position: 'absolute', color: 'var(--text-tertiary)', fontSize: '12px', fontWeight: 600 }}>
-              {camStatus === 'starting' ? 'Initializing Camera...' : 'Camera Feed Inactive'}
-            </div>
-          )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Left: Video + Canvas Overlay */}
+        <div className="flex flex-col gap-4">
+          <div className="relative w-fit">
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              playsInline
+              className="rounded-lg"
+              style={{ width: 320, height: 240, backgroundColor: '#000' }}
+            />
+            <canvas
+              ref={canvasRef}
+              width={320}
+              height={240}
+              className="absolute top-0 left-0 rounded-lg pointer-events-none"
+            />
+          </div>
 
-          <div style={{ 
-            width: '24px', height: '24px', borderRadius: '50%', border: '2px solid var(--blue-text)', 
-            position: 'absolute', bottom: '16px', left: `${faceLeftPct}%`, transform: 'translateX(-50%)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'left 0.5s ease-out',
-            zIndex: 20, background: 'rgba(255,255,255,0.8)'
-          }}>
-            <svg width="12" height="10" viewBox="0 0 20 16" fill="none">
-              <circle cx="6" cy="8" r="3" stroke="var(--blue-text)" strokeWidth="1.2"/>
-              <circle cx="14" cy="8" r="3" stroke="var(--blue-text)" strokeWidth="1.2"/>
-            </svg>
+          <div className="flex gap-2">
+            {camStatus === 'off' ? (
+              <button
+                onClick={startCamera}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+              >
+                Start
+              </button>
+            ) : (
+              <button
+                onClick={stopCamera}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+              >
+                Stop
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Right Section: Diagnostics Panel (~40%) */}
-        <div className="flex-1 flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
-            {metrics.map((m, i) => (
-              <div key={i} style={{ background: 'var(--bg-secondary)', border: '0.5px solid var(--border)' }} className="p-3 rounded-xl flex flex-col gap-0.5">
-                <span style={{ color: 'var(--text-tertiary)' }} className="text-[9px] uppercase font-bold tracking-wider leading-tight">{m.label}</span>
-                <span style={{ color: m.warn ? 'var(--amber-text)' : 'var(--text-primary)' }} className="text-base font-bold leading-tight">
-                  {m.value}
+        {/* Right: Stats */}
+        <div className="flex flex-col justify-center">
+          {stats ? (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-white/60">Face:</span>
+                <span className={stats.faceDetected ? 'text-green-400' : 'text-red-400'}>
+                  {stats.faceDetected ? 'Yes' : 'No'}
                 </span>
               </div>
-            ))}
-          </div>
-
-          {/* Status Badge */}
-          <div style={{ 
-            background: statusColor.bg, 
-            color: statusColor.text,
-            border: '0.5px solid var(--border)',
-            fontSize: '11px',
-            fontWeight: 700
-          }} className="mt-auto p-3 rounded-lg text-center uppercase tracking-widest">
-            {!hasLiveData ? 'OFFLINE' : displayStats.faceDetected ? 'Face Detected' : 'No Face Detected'}
-          </div>
-          
-          {/* Debug Info Display */}
-          {debugMode && debugInfo && (
-            <div style={{ 
-              background: 'var(--bg-secondary)', 
-              border: '0.5px solid var(--amber-border)', 
-              borderRadius: 'var(--radius-md)',
-              padding: '12px',
-              fontSize: '10px',
-              fontFamily: 'monospace'
-            }} className="mt-4">
-              <div style={{ color: 'var(--amber-text)', fontWeight: 'bold', marginBottom: '8px' }}>DEBUG INFO</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div>FPS: {debugInfo.fps}</div>
-                <div>Data Age: {debugInfo.dataAge !== null ? `${debugInfo.dataAge}s` : 'N/A'}</div>
-                <div>Write Freq: {debugInfo.writeFrequency}</div>
-                <div>Status: {debugInfo.camStatus}</div>
-                <div>Landmarks: {debugInfo.landmarksCount}</div>
-                <div>Live Data: {debugInfo.hasLiveData ? 'Yes' : 'No'}</div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Distance:</span>
+                <span className="text-white font-medium">{stats.distanceCm} cm</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Blinks/min:</span>
+                <span className="text-white font-medium">{stats.blinkRate}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Light:</span>
+                <span className="text-white font-medium">{stats.lux} lux</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">FPS:</span>
+                <span className="text-white font-medium">{fps}</span>
               </div>
             </div>
+          ) : (
+            <div className="text-white/40 text-sm italic">Face detection unavailable</div>
           )}
         </div>
       </div>

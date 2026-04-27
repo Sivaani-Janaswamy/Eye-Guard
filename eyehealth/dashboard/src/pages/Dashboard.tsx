@@ -173,24 +173,40 @@ export default function Dashboard() {
           {/* Metrics Grid 2x2 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="metric-card">
-              <div className="metric-label">Avg screen time</div>
-              <div className="metric-value">{(displayHistory.reduce((a,b)=>a+b.totalScreenMinutes,0)/displayHistory.length/60).toFixed(1)} hrs</div>
-              <div className="text-[11px] mt-1 text-red-400 font-medium">Above 6hr target</div>
+              <div className="metric-label">Live Distance</div>
+              <div className="metric-value">
+                {liveStats?.distanceCm ? `${Math.round(liveStats.distanceCm)} cm` : '—'}
+              </div>
+              <div className={`text-[11px] mt-1 font-medium ${liveStats?.distanceCm && liveStats.distanceCm >= 50 && liveStats.distanceCm <= 70 ? 'text-green-400' : 'text-amber-400'}`}>
+                {liveStats?.distanceCm ? (liveStats.distanceCm >= 50 && liveStats.distanceCm <= 70 ? 'Optimal range' : 'Aim for 50-70cm') : 'No data'}
+              </div>
             </div>
             <div className="metric-card">
-              <div className="metric-label">Avg blink rate</div>
-              <div className="metric-value">{(displayHistory.reduce((a,b)=>a+b.breakdown.blinkScore,0)/displayHistory.length).toFixed(1)}/min</div>
-              <div className="text-[11px] mt-1 text-red-400 font-medium">Below 15/min target</div>
+              <div className="metric-label">Live Blink Rate</div>
+              <div className="metric-value">
+                {liveStats?.blinkRate ? `${Math.round(liveStats.blinkRate)}/min` : '—'}
+              </div>
+              <div className={`text-[11px] mt-1 font-medium ${liveStats?.blinkRate && liveStats.blinkRate >= 15 ? 'text-green-400' : 'text-amber-400'}`}>
+                {liveStats?.blinkRate ? (liveStats.blinkRate >= 15 ? 'Healthy rate' : 'Aim for 15+/min') : 'No data'}
+              </div>
             </div>
             <div className="metric-card">
-              <div className="metric-label">Avg distance</div>
-              <div className="metric-value">{Math.round(displayHistory.reduce((a,b)=>a+b.breakdown.distanceScore,0)/displayHistory.length + 30)} cm</div>
-              <div className="text-[11px] mt-1 text-green-400 font-medium">Within safe range</div>
+              <div className="metric-label">Ambient Light</div>
+              <div className="metric-value">
+                {liveStats?.lux ? `${Math.round(liveStats.lux)} lux` : '—'}
+              </div>
+              <div className={`text-[11px] mt-1 font-medium ${liveStats?.lux && liveStats.lux >= 200 ? 'text-green-400' : liveStats?.lux && liveStats.lux < 50 ? 'text-red-400' : 'text-amber-400'}`}>
+                {liveStats?.lux ? (liveStats.lux >= 200 ? 'Good lighting' : liveStats.lux < 50 ? 'Too dim' : 'Aim for 200+ lux') : 'No data'}
+              </div>
             </div>
             <div className="metric-card">
-              <div className="metric-label">Breaks taken</div>
-              <div className="metric-value">14 / 22</div>
-              <div className="text-[11px] mt-1 text-amber-400 font-medium">64% compliance</div>
+              <div className="metric-label">Face Detected</div>
+              <div className="metric-value">
+                {liveStats?.faceDetected ? 'Yes' : liveStats ? 'No' : '—'}
+              </div>
+              <div className={`text-[11px] mt-1 font-medium ${liveStats?.faceDetected ? 'text-green-400' : 'text-amber-400'}`}>
+                {liveStats?.faceDetected ? 'Tracking active' : liveStats ? 'Move into view' : 'No data'}
+              </div>
             </div>
           </div>
 
