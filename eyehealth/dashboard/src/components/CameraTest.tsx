@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, memo } from 'react';
+import { useRef, useState, useCallback, memo, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@extension/db/db';
 
@@ -12,73 +12,79 @@ interface LiveStats {
   confidence?: number;
 }
 
+interface MessageData {
+  distance: number;
+  blinkRate: number;
+  lux: number;
+  faceDetected: boolean;
+}
+
 function CameraTest() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [camStatus, setCamStatus] = useState<'off' | 'starting' | 'on'>('off');
-
-  // Read live_stats from IndexedDB (written by extension main-world.ts)
+  
+  // Real-time data from chrome.runtime messages
+  const [realTimeData, setRealTimeData] = useState<MessageData | null>(null);
+  const [lastMessageTime, setLastMessageTime] = useState<number>(0);
+  
+  // IndexedDB fallback
   const liveStats = useLiveQuery<LiveStats | null>(
     () => db.table('live_stats').get(1).catch(() => null),
     []
   );
+  
+  // Debug panel data
+  const sessionsCount = useLiveQuery(() => db.sessions.count(), [], 0);
+  const scoresCount = useLiveQuery(() => db.scores.count(), [], 0);
+  const lastScore = useLiveQuery(() => db.scores.orderBy('date').last(), [], null);
+  
+  // Score computation state
+  const [scoreComputing, setScoreComputing] = useState(false);
+  const [scoreResult, setScoreResult] = useState<string>('');
 
-  // ----------- DERIVED STATE -----------
-  const isStale = !liveStats || (Date.now() - liveStats.updatedAt) > 5000;
-  const faceDetected = !isStale && liveStats?.faceDetected;
+  // Use real-time data if recent (within 2s), otherwise fallback to IndexedDB
+  const useRealTime = realTimeData && (Date.now() - lastMessageTime) < 2000;
+  const currentData = useRealTime ? realTimeData : (liveStats ? {
+    distance: liveStats.distanceCm,
+    blinkRate: liveStats.blinkRate,
+    lux: liveStats.lux,
+    faceDetected: liveStats.faceDetected
+  } : null);
+  
+  const faceDetected = currentData?.faceDetected ?? false;
+  const distance = currentData?.distance ?? 0;
+  const lastUpdate = useRealTime ? lastMessageTime : (liveStats?.updatedAt ?? 0);
+  const dataAge = lastUpdate ? Date.now() - lastUpdate : Infinity;
 
-  // Optimal conditions: good distance (50-70cm) AND good lighting (>=50 lux)
-  const isDistanceGood = faceDetected && liveStats!.distanceCm >= 50 && liveStats!.distanceCm <= 70;
-  const isLightingGood = !isStale && liveStats!.lux >= 50;
-  const isOptimal = isDistanceGood && isLightingGood;
-
-  // Color helpers
+  // Distance color
   const getDistanceColor = () => {
-    if (!faceDetected) return 'text-gray-400';
-    const d = liveStats!.distanceCm;
-    if (d < 50) return 'text-amber-400';
-    if (d <= 70) return 'text-green-400';
-    return 'text-blue-400';
+    if (!faceDetected) return '#ef4444';
+    if (distance >= 50 && distance <= 70) return '#22c55e';
+    if (distance < 50) return '#f59e0b';
+    return '#3b82f6';
   };
 
-  const getBlinkColor = () => {
-    if (!faceDetected) return 'text-gray-400';
-    const b = liveStats!.blinkRate;
-    if (b < 15) return 'text-amber-400';
-    return 'text-green-400';
-  };
+  // Message listener for real-time updates
+  useEffect(() => {
+    const listener = (message: any, _sender: any, _sendResponse: any) => {
+      if (message.type === 'LIVE_STATS' && message.data) {
+        setRealTimeData(message.data);
+        setLastMessageTime(Date.now());
+      }
+    };
+    
+    if (chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.addListener(listener);
+    }
+    
+    return () => {
+      if (chrome.runtime?.onMessage) {
+        chrome.runtime.onMessage.removeListener(listener);
+      }
+    };
+  }, []);
 
-  const getLuxColor = () => {
-    if (isStale) return 'text-gray-400';
-    const l = liveStats!.lux;
-    if (l < 50) return 'text-amber-400';
-    return 'text-green-400';
-  };
-
-  const getAgeColor = () => {
-    if (!liveStats) return 'text-gray-400';
-    const age = Date.now() - liveStats.updatedAt;
-    if (age > 3000) return 'text-red-400';
-    if (age > 1000) return 'text-amber-400';
-    return 'text-green-400';
-  };
-
-  const getStatusColor = () => {
-    if (isStale) return 'text-gray-400';
-    if (!faceDetected) return 'text-amber-400';
-    if (isOptimal) return 'text-green-400';
-    return 'text-amber-400';
-  };
-
-  const getStatusText = () => {
-    if (isStale) return 'Waiting for data';
-    if (!faceDetected) return 'No face detected';
-    if (isOptimal) return 'Optimal';
-    if (!isDistanceGood) return 'Adjust distance';
-    if (!isLightingGood) return 'More light needed';
-    return 'Face detected';
-  };
-
-  // ----------- CAMERA START -----------
+  // Camera start
   const startCamera = useCallback(async () => {
     setCamStatus('starting');
     try {
@@ -96,7 +102,7 @@ function CameraTest() {
     }
   }, []);
 
-  // ----------- CAMERA STOP -----------
+  // Camera stop
   const stopCamera = useCallback(() => {
     const video = videoRef.current;
     if (video?.srcObject) {
@@ -106,51 +112,158 @@ function CameraTest() {
     setCamStatus('off');
   }, []);
 
-  // ----------- RENDER -----------
-  return (
-    <div className="glassmorphism p-8 rounded-2xl">
-      <h3 className="text-xl font-semibold text-white mb-6">Camera Diagnostics</h3>
+  // Manual score computation
+  const computeScore = useCallback(async () => {
+    setScoreComputing(true);
+    setScoreResult('');
+    let timeout = setTimeout(() => {
+      setScoreResult('No response from service worker');
+      setScoreComputing(false);
+    }, 3000);
+    
+    try {
+      await new Promise<void>((resolve) => {
+        chrome.runtime.sendMessage({ type: 'COMPUTE_SCORE' }, (response) => {
+          clearTimeout(timeout);
+          if (response?.success) {
+            setScoreResult('Score computed successfully');
+          } else {
+            setScoreResult('Failed to compute score');
+          }
+          resolve();
+        });
+      });
+    } catch (err) {
+      clearTimeout(timeout);
+      setScoreResult('Error: ' + (err as Error).message);
+    } finally {
+      setScoreComputing(false);
+    }
+  }, []);
 
-      {/* Stale data message */}
-      {isStale && (
-        <div className="mb-6 p-4 bg-blue-500/15 border border-blue-500/30 rounded-xl">
-          <p className="text-blue-200 text-sm leading-relaxed">
+  return (
+    <div style={{ 
+      background: '#ffffff', 
+      border: '1px solid #e5e7eb', 
+      borderRadius: '12px', 
+      padding: '24px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+    }}>
+      <h3 style={{ 
+        fontSize: '18px', 
+        fontWeight: 600, 
+        color: '#111827', 
+        marginBottom: '20px' 
+      }}>
+        Camera Diagnostics
+      </h3>
+
+      {/* Stale data warning */}
+      {dataAge > 5000 && (
+        <div style={{ 
+          marginBottom: '16px', 
+          padding: '12px', 
+          background: '#f0f9ff', 
+          border: '1px solid #bae6fd', 
+          borderRadius: '8px' 
+        }}>
+          <p style={{ fontSize: '13px', color: '#0369a1', margin: 0 }}>
             Open any webpage — the extension monitors you there and sends data here automatically.
           </p>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
         {/* Left: Video Preview */}
-        <div className="flex flex-col gap-5">
-          <div className="relative self-start">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ position: 'relative', display: 'inline-block' }}>
             <video
               ref={videoRef}
               autoPlay
               muted
               playsInline
-              className="rounded-xl shadow-lg"
               style={{
-                width: 640,
-                height: 480,
+                width: '480px',
+                height: '360px',
                 backgroundColor: '#000',
-                transform: 'scaleX(-1)'
+                transform: 'scaleX(-1)',
+                borderRadius: '8px',
+                display: 'block'
               }}
             />
+            
+            {/* Bounding Box */}
+            {camStatus === 'on' && (
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: '200px',
+                height: '200px',
+                border: `3px solid ${faceDetected ? '#22c55e' : '#ef4444'}`,
+                borderRadius: '8px',
+                transition: 'border-color 0.3s ease',
+                pointerEvents: 'none'
+              }} />
+            )}
+            
+            {/* Distance Overlay */}
+            {camStatus === 'on' && currentData && (
+              <div style={{
+                position: 'absolute',
+                bottom: '12px',
+                left: '12px',
+                background: 'rgba(0,0,0,0.7)',
+                border: `1px solid ${getDistanceColor()}`,
+                color: '#fff',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: 600,
+                fontFamily: 'monospace'
+              }}>
+                {Math.round(distance)} cm
+              </div>
+            )}
           </div>
 
-          <div className="flex gap-3">
+          <div style={{ display: 'flex', gap: '8px' }}>
             {camStatus === 'off' ? (
               <button
                 onClick={startCamera}
-                className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+                style={{
+                  padding: '8px 16px',
+                  background: '#22c55e',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'background 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = '#16a34a'}
+                onMouseOut={(e) => e.currentTarget.style.background = '#22c55e'}
               >
                 Start Camera
               </button>
             ) : (
               <button
                 onClick={stopCamera}
-                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors"
+                style={{
+                  padding: '8px 16px',
+                  background: '#ef4444',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'background 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = '#dc2626'}
+                onMouseOut={(e) => e.currentTarget.style.background = '#ef4444'}
               >
                 Stop Camera
               </button>
@@ -159,63 +272,103 @@ function CameraTest() {
         </div>
 
         {/* Right: Stats Grid */}
-        <div className="flex flex-col">
-          <div className="grid grid-cols-2 gap-4 h-full">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: '280px' }}>
+          {/* Metric Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             {/* Distance */}
-            <div className="flex flex-col justify-center p-5 bg-white/5 rounded-xl">
-              <div className="text-white/40 text-xs uppercase tracking-wider mb-2">Distance</div>
-              <div className={`text-2xl font-bold ${getDistanceColor()}`}>
-                {faceDetected ? `${liveStats!.distanceCm}` : '—'}
+            <div style={{ 
+              padding: '16px', 
+              background: '#f9fafb', 
+              border: '1px solid #e5e7eb', 
+              borderRadius: '8px' 
+            }}>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', marginBottom: '4px' }}>Distance</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: getDistanceColor() }}>
+                {currentData ? Math.round(distance) : '—'}
               </div>
-              {faceDetected && <div className="text-white/30 text-xs mt-1">cm</div>}
+              {currentData && <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>cm</div>}
             </div>
 
             {/* Blink Rate */}
-            <div className="flex flex-col justify-center p-5 bg-white/5 rounded-xl">
-              <div className="text-white/40 text-xs uppercase tracking-wider mb-2">Blink Rate</div>
-              <div className={`text-2xl font-bold ${getBlinkColor()}`}>
-                {faceDetected ? `${liveStats!.blinkRate}` : '—'}
+            <div style={{ 
+              padding: '16px', 
+              background: '#f9fafb', 
+              border: '1px solid #e5e7eb', 
+              borderRadius: '8px' 
+            }}>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', marginBottom: '4px' }}>Blink Rate</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: currentData?.blinkRate >= 15 ? '#22c55e' : '#f59e0b' }}>
+                {currentData ? Math.round(currentData.blinkRate) : '—'}
               </div>
-              {faceDetected && <div className="text-white/30 text-xs mt-1">/min</div>}
+              {currentData && <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>/min</div>}
             </div>
 
             {/* Lighting */}
-            <div className="flex flex-col justify-center p-5 bg-white/5 rounded-xl">
-              <div className="text-white/40 text-xs uppercase tracking-wider mb-2">Lighting</div>
-              <div className={`text-2xl font-bold ${getLuxColor()}`}>
-                {!isStale ? `${liveStats!.lux}` : '—'}
+            <div style={{ 
+              padding: '16px', 
+              background: '#f9fafb', 
+              border: '1px solid #e5e7eb', 
+              borderRadius: '8px' 
+            }}>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', marginBottom: '4px' }}>Lighting</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: currentData?.lux >= 50 ? '#22c55e' : '#f59e0b' }}>
+                {currentData ? Math.round(currentData.lux) : '—'}
               </div>
-              {!isStale && <div className="text-white/30 text-xs mt-1">lux</div>}
-            </div>
-
-            {/* Confidence */}
-            <div className="flex flex-col justify-center p-5 bg-white/5 rounded-xl">
-              <div className="text-white/40 text-xs uppercase tracking-wider mb-2">Confidence</div>
-              <div className={`text-2xl font-bold ${faceDetected ? 'text-green-400' : 'text-gray-400'}`}>
-                {faceDetected && liveStats!.confidence !== undefined
-                  ? `${Math.round(liveStats!.confidence * 100)}`
-                  : '—'}
-              </div>
-              {faceDetected && <div className="text-white/30 text-xs mt-1">%</div>}
+              {currentData && <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>lux</div>}
             </div>
 
             {/* Data Age */}
-            <div className="flex flex-col justify-center p-5 bg-white/5 rounded-xl">
-              <div className="text-white/40 text-xs uppercase tracking-wider mb-2">Data Age</div>
-              <div className={`text-2xl font-bold ${getAgeColor()}`}>
-                {liveStats
-                  ? `${Math.round((Date.now() - liveStats.updatedAt) / 1000)}`
-                  : '—'}
+            <div style={{ 
+              padding: '16px', 
+              background: '#f9fafb', 
+              border: '1px solid #e5e7eb', 
+              borderRadius: '8px' 
+            }}>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', marginBottom: '4px' }}>Data Age</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: dataAge > 3000 ? '#ef4444' : dataAge > 1000 ? '#f59e0b' : '#22c55e' }}>
+                {dataAge === Infinity ? '—' : Math.round(dataAge / 1000)}
               </div>
-              {liveStats && <div className="text-white/30 text-xs mt-1">seconds ago</div>}
+              <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>seconds ago</div>
             </div>
+          </div>
 
-            {/* Status */}
-            <div className="flex flex-col justify-center p-5 bg-white/5 rounded-xl">
-              <div className="text-white/40 text-xs uppercase tracking-wider mb-2">Status</div>
-              <div className={`text-lg font-semibold leading-tight ${getStatusColor()}`}>
-                {getStatusText()}
+          {/* Score Computation Button */}
+          <div style={{ padding: '16px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+            <button
+              onClick={computeScore}
+              disabled={scoreComputing}
+              style={{
+                width: '100%',
+                padding: '10px',
+                background: scoreComputing ? '#9ca3af' : '#3b82f6',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: 500,
+                cursor: scoreComputing ? 'not-allowed' : 'pointer',
+                transition: 'background 0.2s'
+              }}
+              onMouseOver={(e) => !scoreComputing && (e.currentTarget.style.background = '#2563eb')}
+              onMouseOut={(e) => !scoreComputing && (e.currentTarget.style.background = '#3b82f6')}
+            >
+              {scoreComputing ? 'Computing...' : 'Compute Today\'s Score'}
+            </button>
+            {scoreResult && (
+              <div style={{ marginTop: '8px', fontSize: '12px', color: scoreResult.includes('success') ? '#22c55e' : '#ef4444' }}>
+                {scoreResult}
               </div>
+            )}
+          </div>
+
+          {/* Debug Panel */}
+          <div style={{ padding: '16px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '8px' }}>Debug Panel</div>
+            <div style={{ fontSize: '12px', color: '#6b7280', lineHeight: '1.6' }}>
+              <div>Sessions: {sessionsCount}</div>
+              <div>Scores: {scoresCount}</div>
+              <div>Last score: {lastScore?.date || 'None'}</div>
+              <div>Data source: {useRealTime ? 'Real-time message' : 'IndexedDB fallback'}</div>
             </div>
           </div>
         </div>
