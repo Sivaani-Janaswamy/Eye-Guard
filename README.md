@@ -1,6 +1,6 @@
 # EyeGuard — AI Vision Health & Digital Correction System
 
-> Like Grammarly, but for your eyes.
+> Your personal eye health guardian that protects your vision while you work.
 
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![Version](https://img.shields.io/badge/version-1.4.1-blue)
