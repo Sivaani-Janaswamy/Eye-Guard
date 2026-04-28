@@ -3,7 +3,7 @@ import Dashboard from './pages/Dashboard';
 
 function App() {
   return (
-    <div className="min-h-screen bg-neutral-950 text-white font-sans selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen font-sans selection:bg-indigo-500 selection:text-white" style={{ backgroundColor: '#6b7280', color: '#111827' }}>
       <Dashboard />
     </div>
   );

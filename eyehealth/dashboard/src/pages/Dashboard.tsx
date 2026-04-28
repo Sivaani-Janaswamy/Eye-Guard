@@ -126,24 +126,15 @@ export default function Dashboard() {
     <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '16px 32px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
       <header style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#111827', letterSpacing: '-0.025em' }}>EyeGuard Dashboard</h1>
-          <p style={{ color: '#6b7280', fontSize: '14px', marginTop: '4px' }}>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#ffffff', letterSpacing: '-0.025em' }}>EyeGuard Dashboard</h1>
+          <p style={{ color: '#ffffff', fontSize: '14px', marginTop: '4px' }}>
             Holistic tracking map for optical longevity. 
-            (Distance: <span style={{ color: '#3b82f6', fontFamily: 'monospace' }}>{liveDistance}</span>
-            {activeSession && <> | Session: <span style={{ color: '#3b82f6', fontFamily: 'monospace' }}>{formatTime(sessionTimeMs)}</span></>})
+            (Distance: <span style={{ color: '#fcd34d', fontFamily: 'monospace' }}>{liveDistance}</span>
+            {activeSession && <> | Session: <span style={{ color: '#fcd34d', fontFamily: 'monospace' }}>{formatTime(sessionTimeMs)}</span></>})
           </p>
-          <span style={{ fontSize: '12px', color: '#3b82f6', fontFamily: 'monospace' }}>Build: 2026-04-19</span>
+          <span style={{ fontSize: '12px', color: '#fcd34d', fontFamily: 'monospace' }}>Build: 2026-04-19</span>
         </div>
-        {isDemoData && (
-          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', fontSize: '12px', fontWeight: 600, padding: '8px 16px', borderRadius: '9999px', display: 'flex', alignItems: 'center', gap: '8px', width: 'fit-content' }}>
-             <span style={{ display: 'flex', width: '8px', height: '8px' }}>
-              <span style={{ animation: 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite', position: 'absolute', display: 'inline-flex', width: '100%', height: '100%', borderRadius: '50%', background: '#3b82f6', opacity: 0.75 }}></span>
-              <span style={{ position: 'relative', display: 'inline-flex', borderRadius: '50%', width: '8px', height: '8px', background: '#3b82f6' }}></span>
-            </span>
-            Demo data — Tracking loop is currently inactive
-          </div>
-        )}
-      </header>
+              </header>
       {/* Diagnostics Panel - Always Visible */}
       <section style={{ marginBottom: '16px' }}>
         <CameraTest />
