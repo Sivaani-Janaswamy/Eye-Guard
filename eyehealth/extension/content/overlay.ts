@@ -20,6 +20,13 @@ const TOAST_THROTTLE_MS = 200; // Reduced throttling for responsiveness
 let isDragging = false; // Track drag state to prevent click events during drag
 let isRendering = false; // Prevent overlapping render calls
 
+// Time-based suggestion tracking
+let lowBlinkStartRef: number | null = null;
+let closeDistanceStartRef: number | null = null;
+let sessionStartRef: number = Date.now();
+let lastSuggestionByType: Record<string, number> = {};
+let currentSuggestion: { type: string; message: string; priority: number; icon: string } | null = null;
+
 // -------------------- SAFETY UTILITIES --------------------
 function safeSetHTML(element: HTMLElement, html: string): void {
   try {
@@ -313,30 +320,6 @@ function makeDraggable(el: HTMLElement) {
 }
 
 // -------------------- HEALTH STATUS CALCULATION --------------------
-function generateOptimizationSuggestions(distance: number, blinkRate: number, lux: number): string[] {
-  const suggestions = [];
-  
-  if (distance > 0 && distance < 50) {
-    suggestions.push("Move back to 50-70cm from screen");
-  } else if (distance > 70) {
-    suggestions.push("Move closer to 50-70cm from screen");
-  }
-  
-  if (blinkRate > 0 && blinkRate < 15) {
-    suggestions.push("Blink more - aim for 15-20 blinks/min");
-  } else if (blinkRate > 20) {
-    suggestions.push("Reduce blinking - aim for 15-20 blinks/min");
-  }
-  
-  if (lux > 0 && lux < 200) {
-    suggestions.push("Increase lighting to 200-500 lux");
-  } else if (lux > 500) {
-    suggestions.push("Reduce lighting to 200-500 lux");
-  }
-  
-  return suggestions;
-}
-
 function calculateHealthStatus(): { status: 'positive' | 'normal' | 'warning' | 'critical', message?: string } {
   // Critical state check
   if (activeAlert?.severity === 'critical') {
@@ -345,25 +328,22 @@ function calculateHealthStatus(): { status: 'positive' | 'normal' | 'warning' | 
 
   // Get current metrics
   const distance = lastDistance;
-  const blinkRate = lastBlinkRate || 0;
   const lux = lastLux || 0;
 
-  // Check for positive state (all metrics optimal)
+  // Check for positive state (distance 50-70cm AND lux >= 100, ignore blink rate)
   const isDistanceOptimal = distance >= 50 && distance <= 70;
-  const isBlinkRateOptimal = blinkRate >= 15 && blinkRate <= 20;
-  const isLightingOptimal = lux >= 200 && lux <= 500;
+  const isLightingOptimal = lux >= 100;
 
-  if (isDistanceOptimal && isBlinkRateOptimal && isLightingOptimal) {
+  if (isDistanceOptimal && isLightingOptimal) {
     return { status: 'positive', message: 'Great posture! Your eyes are healthy' };
   }
 
-  // NEW: Warning with specific suggestions for non-optimal metrics
-  const suggestions = generateOptimizationSuggestions(distance, blinkRate, lux);
-  if (suggestions.length > 0) {
-    return { 
-      status: 'warning', 
-      message: `To optimize: ${suggestions.join(', ')}` 
-    };
+  // Warning if distance OR lighting outside optimal range
+  if (distance > 0 && !isDistanceOptimal) {
+    return { status: 'warning', message: 'Adjust your distance' };
+  }
+  if (lux > 0 && !isLightingOptimal) {
+    return { status: 'warning', message: 'Adjust your lighting' };
   }
 
   // Check for active alerts (fallback)
@@ -373,6 +353,83 @@ function calculateHealthStatus(): { status: 'positive' | 'normal' | 'warning' | 
 
   // Normal state (no specific issues, but not all optimal)
   return { status: 'normal' };
+}
+
+// -------------------- SUGGESTION GENERATION --------------------
+function generateSuggestion(distance: number, blinkRate: number, lux: number, now: number): { type: string; message: string; priority: number; icon: string } | null {
+  const suggestions: Array<{ type: string; message: string; priority: number; icon: string }> = [];
+  const COOLDOWN_MS = 15000; // 15 seconds per-type cooldown
+
+  // 1. Low blink rate (after 10s of <15 blinks/min)
+  if (blinkRate < 15) {
+    if (!lowBlinkStartRef) {
+      lowBlinkStartRef = now;
+    }
+    const lowBlinkDuration = now - lowBlinkStartRef;
+    if (lowBlinkDuration > 10000) { // 10 seconds
+      if (!lastSuggestionByType['blink'] || now - lastSuggestionByType['blink'] > COOLDOWN_MS) {
+        suggestions.push({
+          type: 'blink',
+          message: 'Blink more — your blink rate is low',
+          priority: 3,
+          icon: '👁️'
+        });
+      }
+    }
+  } else {
+    lowBlinkStartRef = null;
+  }
+
+  // 2. Close distance (after 5s of <50cm)
+  if (distance < 50) {
+    if (!closeDistanceStartRef) {
+      closeDistanceStartRef = now;
+    }
+    const closeDuration = now - closeDistanceStartRef;
+    if (closeDuration > 5000) { // 5 seconds
+      if (!lastSuggestionByType['distance'] || now - lastSuggestionByType['distance'] > COOLDOWN_MS) {
+        suggestions.push({
+          type: 'distance',
+          message: 'Move back — you\'re too close',
+          priority: 2,
+          icon: '📏'
+        });
+      }
+    }
+  } else {
+    closeDistanceStartRef = null;
+  }
+
+  // 3. Poor lighting (immediate if <50 lux)
+  if (lux < 50) {
+    if (!lastSuggestionByType['lighting'] || now - lastSuggestionByType['lighting'] > COOLDOWN_MS) {
+      suggestions.push({
+        type: 'lighting',
+        message: 'More light needed — room is too dark',
+        priority: 2,
+        icon: '💡'
+      });
+    }
+  }
+
+  // 4. Break suggestion (after 20min session)
+  const sessionDuration = now - sessionStartRef;
+  if (sessionDuration > 20 * 60 * 1000) { // 20 minutes
+    if (!lastSuggestionByType['break'] || now - lastSuggestionByType['break'] > COOLDOWN_MS) {
+      suggestions.push({
+        type: 'break',
+        message: 'Take a break — 20+ mins of screen time',
+        priority: 1,
+        icon: '⏸️'
+      });
+    }
+  }
+
+  // Return highest priority suggestion
+  if (suggestions.length > 0) {
+    return suggestions.reduce((max, s) => s.priority > max.priority ? s : max);
+  }
+  return null;
 }
 
 function renderUnifiedToast() {
@@ -448,7 +505,9 @@ function renderExpandedState() {
   const title = healthStatus.status === 'positive' ? 'EyeGuard' : 
                   healthStatus.status === 'normal' ? 'EyeGuard' :
                   'EyeGuard Alert';
-  const alertMessage = healthStatus.message || '';
+  
+  // Use suggestion message if available, otherwise use health status message
+  const displayMessage = currentSuggestion ? currentSuggestion.message : (healthStatus.message || '');
   
   // Clear alert if it's older than 10 seconds
   if (activeAlert && Date.now() - activeAlert.triggeredAt > 10000) {
@@ -465,7 +524,7 @@ function renderExpandedState() {
       </div>
       <div class="eg-text-content">
         <div class="eg-title">${title}</div>
-        ${alertMessage ? `<div class="eg-message">${alertMessage}</div>` : ''}
+        ${displayMessage ? `<div class="eg-message">${displayMessage}</div>` : ''}
         <div class="eg-distance">${distText}</div>
       </div>
     </div>
@@ -708,6 +767,26 @@ window.addEventListener('message', (event) => {
   // Store real-time metrics for health status calculation
   lastBlinkRate = frameData.blinkRate || 0;
   lastLux = frameData.ambientLuxLevel || 0;
+
+  // Generate suggestions based on current metrics
+  const now = Date.now();
+  const newSuggestion = generateSuggestion(lastDistance, lastBlinkRate, lastLux, now);
+  
+  // Only update UI if suggestion type changes (prevent flickering)
+  if (newSuggestion && (!currentSuggestion || currentSuggestion.type !== newSuggestion.type)) {
+    currentSuggestion = newSuggestion;
+    lastSuggestionByType[newSuggestion.type] = now;
+    
+    // Reset session timer after showing break suggestion
+    if (newSuggestion.type === 'break') {
+      sessionStartRef = now;
+    }
+    
+    renderUnifiedToast();
+  } else if (!newSuggestion && currentSuggestion) {
+    currentSuggestion = null;
+    renderUnifiedToast();
+  }
   
   // Throttle re-renders for stats - only update distance text, not full toast
   if (!isMinimized && hudVisible) {

@@ -12,20 +12,15 @@ export function TrendChart({ scores }: { scores: DailyEyeScore[] }) {
   const isInsufficientData = data.length < 3;
 
   return (
-    <div className="glassmorphism p-6 rounded-2xl flex flex-col h-full relative">
-      <h3 className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-6">
-        30-Day Score Trend
-      </h3>
-      
-      <div className="flex-1 min-h-[220px] relative">
-        {isInsufficientData ? (
-          <div className="h-full min-h-[220px] flex flex-col items-center justify-center text-white/40 text-sm px-8 text-center">
-            <div className="mb-2">Keep using EyeGuard to build your trend</div>
-            <div className="text-white/25 text-xs">Check back in {3 - data.length} day{3 - data.length !== 1 ? 's' : ''}</div>
-          </div>
-        ) : (
-          <div style={{ width: '100%', height: 220 }}>
-            <ResponsiveContainer width="100%" height="100%">
+    <div className="flex flex-col h-full relative">
+      {isInsufficientData ? (
+        <div className="h-full flex flex-col items-center justify-center text-white/40 text-sm px-8 text-center">
+          <div className="mb-2">Keep using EyeGuard to build your trend</div>
+          <div className="text-white/25 text-xs">Check back in {3 - data.length} day{3 - data.length !== 1 ? 's' : ''}</div>
+        </div>
+      ) : (
+        <div className="h-full">
+          <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data} margin={{ top: 5, right: 0, left: -10, bottom: 20 }}>
               <defs>
                 <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
@@ -47,10 +42,9 @@ export function TrendChart({ scores }: { scores: DailyEyeScore[] }) {
               <ReferenceLine y={50} stroke="rgba(220, 53, 69, 0.3)" strokeDasharray="3 3" />
               <Area type="monotone" dataKey="score" stroke="#818cf8" strokeWidth={3} fillOpacity={1} fill="url(#scoreGradient)" />
             </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </div>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }

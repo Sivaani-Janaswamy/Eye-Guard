@@ -161,13 +161,15 @@ export default function Dashboard() {
         {/* Center / Right Column: Deep data & Overrides */}
         <div className="lg:col-span-8 flex flex-col gap-8">
           {/* Top Section: Charts */}
-          <div className="flex flex-col glassmorphism p-6 h-[320px]">
+          <div className="flex flex-col glassmorphism p-6 rounded-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-white/50 text-xs font-semibold uppercase tracking-wider">30-day eye score history</h3>
-              <span className="badge badge-amber">Avg: {Math.round(displayHistory.reduce((a,b)=>a+b.score,0)/displayHistory.length)}</span>
+              <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs rounded">Avg: {Math.round(displayHistory.reduce((a,b)=>a+b.score,0)/displayHistory.length)}</span>
             </div>
-            <TrendChart scores={displayHistory} />
-            <div className="text-[11px] text-white/30 text-center mt-4 italic">Connect extension to see real-time data flow</div>
+            <div className="h-[240px]">
+              <TrendChart scores={displayHistory} />
+            </div>
+            <div className="text-[11px] text-white/30 text-center mt-3 italic">Connect extension to see real-time data flow</div>
           </div>
           
           {/* Metrics Grid 2x2 */}
