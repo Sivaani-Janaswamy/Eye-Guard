@@ -21,7 +21,7 @@ If you are an AI agent reading this file:
 ## 1. Project Overview
 
 **Name:** EyeGuard — AI Vision Health & Digital Correction System
-**Tagline:** Like Grammarly running in the background, but for your eyes.
+**Tagline:** Your personal eye health guardian that protects your vision while you work.
 
 **Problem:** Myopia prevalence is rising sharply (~50% of global population by 2050). Poor screen habits — close distance, low blink rate, bad lighting, zero breaks — are the primary behavioral driver. No tool currently monitors these in real time and corrects for them digitally.
 

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "EyeGuard",
   "version": "1.4.1",
-  "description": "AI Vision Health & Digital Correction System. Like Grammarly, but for your eyes.",
+  "description": "AI Vision Health & Digital Correction System. Your personal eye health guardian that protects your vision while you work.",
 
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
