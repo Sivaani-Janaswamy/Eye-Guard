@@ -43,13 +43,33 @@ EyeGuard's privacy-first architecture ensures all processing happens locally on 
 
 ## Live Demo
 
-![EyeGuard Dashboard](docs/screenshots/dashboard-overview.png)
+![EyeGuard Dashboard](eyehealth/docs/screenshots/dashboard-overview.png)
 
 *Screenshot: EyeGuard dashboard showing 30-day score trend, live session metrics, and prediction card*
 
-![Extension Popup](docs/screenshots/popup-score.png)
+![Dashboard Prediction](eyehealth/docs/screenshots/dashboard-prediction.png)
+
+*Screenshot: Risk prediction card showing 7/14/30 day forecasts with confidence levels*
+
+![Extension Popup](eyehealth/docs/screenshots/popup-score.png)
 
 *Screenshot: Popup showing today's eye score with 4-component breakdown*
+
+![HUD Tracking](eyehealth/docs/screenshots/hud-tracking.png)
+
+*Screenshot: Real-time HUD overlay showing distance, blink rate, and ambient light*
+
+![Alert Toast](eyehealth/docs/screenshots/alert-toast.png)
+
+*Screenshot: Smart alert notification for unhealthy screen habits*
+
+![Camera Diagnostics](eyehealth/docs/screenshots/camera-diagnostics.png)
+
+*Screenshot: Camera diagnostics panel with live video feed and bounding box*
+
+![Night Correction](eyehealth/docs/screenshots/correction-night.png)
+
+*Screenshot: Digital vision correction with blue light filter and contrast enhancement*
 
 ---
 
