@@ -82,16 +82,15 @@ function ensureStylesInjected() {
       position: fixed;
       z-index: 2147483647;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      transition: all 0.25s ease;
       user-select: none;
       box-sizing: border-box;
       
       /* Expanded state styling */
       width: 320px;
-      background: var(--eg-bg-primary);
-      border-radius: 16px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.15), 0 2px 10px rgba(0,0,0,0.1);
-      border: 1px solid var(--eg-border);
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border: 1px solid #e5e7eb;
       padding: 16px;
       display: flex;
       align-items: center;
@@ -99,30 +98,30 @@ function ensureStylesInjected() {
       gap: 12px;
     }
 
-    /* Alert-specific color variants */
+    /* Alert-specific color variants - background tints */
     .eg-unified-toast.warning {
-      border-color: var(--eg-amber);
-      border-left: 4px solid var(--eg-amber);
+      background: #fffbeb;
+      border-color: #fcd34d;
     }
     
     .eg-unified-toast.critical {
-      border-color: var(--eg-red);
-      border-left: 4px solid var(--eg-red);
+      background: #fef2f2;
+      border-color: #fca5a5;
     }
     
     .eg-unified-toast.good {
-      border-color: var(--eg-green);
-      border-left: 4px solid var(--eg-green);
+      background: #f0fdf4;
+      border-color: #86efac;
     }
 
     .eg-unified-toast.positive {
-      border-color: var(--eg-green);
-      border-left: 4px solid var(--eg-green);
+      background: #f0fdf4;
+      border-color: #86efac;
     }
     
     .eg-unified-toast.normal {
-      border-color: var(--eg-blue);
-      border-left: 4px solid var(--eg-blue);
+      background: #f0f9ff;
+      border-color: #7dd3fc;
     }
 
     .eg-toast-expanded {
@@ -138,26 +137,25 @@ function ensureStylesInjected() {
     }
 
     .eg-eye-container {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      transition: all 0.25s ease;
     }
 
-    .eg-eye-container.info { background: var(--eg-blue-bg); }
-    .eg-eye-container.warning { background: var(--eg-amber-bg); }
-    .eg-eye-container.critical { background: var(--eg-red-bg); }
-    .eg-eye-container.good { background: var(--eg-green-bg); }
-    .eg-eye-container.positive { background: var(--eg-green-bg); }
-    .eg-eye-container.normal { background: var(--eg-blue-bg); }
+    .eg-eye-container.info { background: #dbeafe; }
+    .eg-eye-container.warning { background: #fef3c7; }
+    .eg-eye-container.critical { background: #fee2e2; }
+    .eg-eye-container.good { background: #dcfce7; }
+    .eg-eye-container.positive { background: #dcfce7; }
+    .eg-eye-container.normal { background: #dbeafe; }
 
     .eg-eye-img {
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
       object-fit: contain;
     }
 
@@ -169,24 +167,25 @@ function ensureStylesInjected() {
     .eg-title {
       font-size: 14px;
       font-weight: 600;
-      color: var(--eg-text-p);
+      color: #111827;
       margin-bottom: 2px;
-      line-height: 1.2;
+      line-height: 1.3;
     }
 
     .eg-message {
-      font-size: 12px;
-      color: var(--eg-text-s);
-      line-height: 1.4;
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.5;
       word-wrap: break-word;
     }
 
     .eg-distance {
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 600;
-      color: var(--eg-text-p);
+      color: #111827;
       margin-top: 2px;
-      line-height: 1.2;
+      line-height: 1.3;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
     }
 
     .eg-actions {
@@ -196,25 +195,23 @@ function ensureStylesInjected() {
     }
 
     .eg-minimize-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
       border: none;
-      background: var(--eg-bg-secondary);
-      color: var(--eg-text-s);
-      font-size: 16px;
-      font-weight: 600;
+      background: #f3f4f6;
+      color: #6b7280;
+      font-size: 14px;
+      font-weight: 500;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.2s ease;
     }
 
     .eg-minimize-btn:hover {
-      background: #e5e4e0;
-      color: var(--eg-text-p);
-      transform: scale(1.05);
+      background: #e5e7eb;
+      color: #374151;
     }
 
     .eg-unified-toast:only-child img {
@@ -224,10 +221,10 @@ function ensureStylesInjected() {
 
     /* Minimized state - class-based approach for Firefox compatibility */
     .eg-unified-toast.minimized {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      border: 2px solid var(--eg-blue);
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -235,32 +232,99 @@ function ensureStylesInjected() {
       overflow: hidden;
       padding: 0;
       gap: 0;
-      background: var(--eg-bg-primary);
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .eg-unified-toast.minimized.warning {
+      background: #fffbeb;
+      border-color: #fcd34d;
+    }
+    
+    .eg-unified-toast.minimized.critical {
+      background: #fef2f2;
+      border-color: #fca5a5;
+    }
+    
+    .eg-unified-toast.minimized.good,
+    .eg-unified-toast.minimized.positive {
+      background: #f0fdf4;
+      border-color: #86efac;
+    }
+    
+    .eg-unified-toast.minimized.normal {
+      background: #f0f9ff;
+      border-color: #7dd3fc;
     }
 
     .eg-unified-toast.minimized:hover {
-      transform: scale(1.1);
-      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
     }
 
     .eg-unified-toast.minimized img {
-      width: 32px;
-      height: 32px;
+      width: 24px;
+      height: 24px;
     }
 
     /* Dark Mode Overrides */
     .eg-dark-mode {
-      background: #1e1e1e;
-      border-color: #333;
-      color: #f0f0f0;
+      background: #1f2937;
+      border-color: #374151;
     }
     .eg-dark-mode .eg-title,
     .eg-dark-mode .eg-message,
     .eg-dark-mode .eg-distance {
-      color: #f0f0f0;
+      color: #f9fafb;
     }
-    .eg-dark-mode .eg-bg-secondary {
-      background: #2a2a2a;
+    .eg-dark-mode .eg-minimize-btn {
+      background: #374151;
+      color: #9ca3af;
+    }
+    .eg-dark-mode .eg-minimize-btn:hover {
+      background: #4b5563;
+      color: #f3f4f6;
+    }
+    .eg-dark-mode.warning {
+      background: #451a03;
+      border-color: #92400e;
+    }
+    .eg-dark-mode.critical {
+      background: #450a0a;
+      border-color: #991b1b;
+    }
+    .eg-dark-mode.good,
+    .eg-dark-mode.positive {
+      background: #052e16;
+      border-color: #166534;
+    }
+    .eg-dark-mode.normal {
+      background: #0c4a6e;
+      border-color: #075985;
+    }
+    .eg-dark-mode .eg-eye-container.info { background: #1e3a8a; }
+    .eg-dark-mode .eg-eye-container.warning { background: #78350f; }
+    .eg-dark-mode .eg-eye-container.critical { background: #7f1d1d; }
+    .eg-dark-mode .eg-eye-container.good,
+    .eg-dark-mode .eg-eye-container.positive { background: #14532d; }
+    .eg-dark-mode .eg-eye-container.normal { background: #1e3a8a; }
+    
+    /* Dark mode for minimized toast */
+    .eg-dark-mode.minimized.warning {
+      background: #451a03;
+      border-color: #92400e;
+    }
+    .eg-dark-mode.minimized.critical {
+      background: #450a0a;
+      border-color: #991b1b;
+    }
+    .eg-dark-mode.minimized.good,
+    .eg-dark-mode.minimized.positive {
+      background: #052e16;
+      border-color: #166534;
+    }
+    .eg-dark-mode.minimized.normal {
+      background: #0c4a6e;
+      border-color: #075985;
     }
   `;
   document.head.appendChild(style);
@@ -482,8 +546,11 @@ function renderUnifiedToast() {
 function renderMinimizedState() {
   if (!unifiedToastElement) return;
   
-  // Apply minimized class
-  unifiedToastElement.className = 'eg-unified-toast minimized';
+  const healthStatus = calculateHealthStatus();
+  const alertType = healthStatus.status;
+  
+  // Apply minimized class with alert type
+  unifiedToastElement.className = `eg-unified-toast minimized ${alertType}`;
   
   safeSetHTML(unifiedToastElement, getSafeEyeIcon());
   
@@ -804,7 +871,8 @@ window.addEventListener('message', (event) => {
       blinkRate: frameData.blinkRate,
       ambientLuxLevel: frameData.ambientLuxLevel,
       faceDetected: frameData.faceDetected,
-      landmarks: frameData.landmarks
+      landmarks: frameData.landmarks,
+      bbox: frameData.bbox || null
     }
   }).catch(() => {});
 

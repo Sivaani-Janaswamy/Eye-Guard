@@ -52,29 +52,25 @@ export function CorrectionPanel() {
   if (!profile) return null;
 
   return (
-    <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)' }} className="p-6 rounded-2xl flex flex-col h-full">
-      <h3 className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-6">
+    <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px' }} className="p-6 flex flex-col h-full">
+      <h3 style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 600, marginBottom: '24px' }}>
         Digital Correction
       </h3>
 
-      <div className="corr-preview mb-6" style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '14px', filter: `contrast(${1 + (profile.contrastBoost || 0) * 0.4}) brightness(${1 - (profile.blueLightFilter || 0) * 0.15}) saturate(${1 - (profile.blueLightFilter || 0) * 0.3}) sepia(${(profile.blueLightFilter || 0) * 0.3})` }}>
-        <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '6px' }}>Preview: text sharpness & contrast</div>
-        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.7' }}>
+      <div className="corr-preview mb-6" style={{ background: '#f9fafb', borderRadius: '8px', padding: '14px', border: '1px solid #e5e7eb', filter: `contrast(${1 + (profile.contrastBoost || 0) * 0.4}) brightness(${1 - (profile.blueLightFilter || 0) * 0.15}) saturate(${1 - (profile.blueLightFilter || 0) * 0.3}) sepia(${(profile.blueLightFilter || 0) * 0.3})` }}>
+        <div style={{ fontSize: '14px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Preview: text sharpness & contrast</div>
+        <div style={{ fontSize: '13px', color: '#6b7280', lineHeight: '1.7' }}>
           This paragraph shows how your screen will look with correction applied. The blue light filter warms the display, contrast boost improves readability.
         </div>
       </div>
 
-      <div className="flex gap-2 mb-8 bg-white/5 p-1.5 rounded-lg border border-white/10" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+      <div className="flex gap-2 mb-8" style={{ background: '#f9fafb', padding: '4px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
         {(["off", "office", "night"] as const).map(preset => (
           <button
             key={preset}
             onClick={() => handlePreset(preset)}
-            className={`flex-1 text-xs py-2 rounded-md font-semibold transition capitalize ${
-              profile.activePreset === preset 
-              ? 'bg-black text-white' 
-              : 'text-white/60 hover:bg-white/10 hover:text-white'
-            }`}
-            style={profile.activePreset === preset ? { background: 'var(--text-primary)', color: 'var(--bg-primary)' } : { color: 'var(--text-secondary)' }}
+            style={{ fontSize: '12px', padding: '8px 16px', borderRadius: '6px', fontWeight: 500, transition: 'all 0.2s', textTransform: 'capitalize' }}
+            className={profile.activePreset === preset ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}
           >
             {preset}
           </button>
@@ -83,8 +79,8 @@ export function CorrectionPanel() {
 
       {appliedPreset && (
         <div className="mb-4 flex items-center gap-2">
-          <span className="badge badge-green text-[10px] px-2 py-1">Applied</span>
-          <span className="text-[11px] text-white/50 capitalize">{appliedPreset} preset active</span>
+          <span style={{ fontSize: '10px', padding: '4px 8px', borderRadius: '9999px', background: '#dcfce7', color: '#166534', fontWeight: 500 }}>Applied</span>
+          <span style={{ fontSize: '11px', color: '#9ca3af', textTransform: 'capitalize' }}>{appliedPreset} preset active</span>
         </div>
       )}
 
@@ -109,7 +105,7 @@ export function CorrectionPanel() {
         />
       </div>
       
-      <div className="text-[10px] text-white/30 italic mt-6">Blue light filter is a CSS approximation.</div>
+      <div style={{ color: '#9ca3af', fontSize: '10px', marginTop: '24px', fontStyle: 'italic' }}>Blue light filter is a CSS approximation.</div>
     </div>
   );
 }
@@ -117,9 +113,9 @@ export function CorrectionPanel() {
 function SliderControl({ label, val, min, max, step, update }: { label: string, val: number, min: number, max: number, step: number, update: (v: number) => void }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex justify-between text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+      <div className="flex justify-between" style={{ fontSize: '12px', fontWeight: 500, color: '#6b7280' }}>
         <span>{label}</span>
-        <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{(val * 100).toFixed(0)}%</span>
+        <span style={{ color: '#374151', fontWeight: 600 }}>{(val * 100).toFixed(0)}%</span>
       </div>
       <input 
         type="range" 
@@ -129,7 +125,7 @@ function SliderControl({ label, val, min, max, step, update }: { label: string, 
         value={val} 
         onChange={e => update(parseFloat(e.target.value))}
         className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
-        style={{ accentColor: 'var(--text-primary)', background: 'var(--border)' }}
+        style={{ accentColor: '#3b82f6', background: '#e5e7eb' }}
       />
     </div>
   );

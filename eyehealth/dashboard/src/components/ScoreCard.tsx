@@ -10,8 +10,8 @@ export function ScoreCard({ scoreData }: { scoreData: DailyEyeScore | null }) {
 
   if (!scoreData) {
     return (
-      <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)' }} className="p-6 rounded-2xl flex flex-col items-center gap-4 h-full justify-center">
-        <h3 className="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em]">Today's eye score</h3>
+      <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px' }} className="p-6 flex flex-col items-center gap-4 h-full justify-center">
+        <h3 style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 600 }}>Today's eye score</h3>
         
         <div className="flex flex-col items-center gap-2">
           <SkeletonBox width="80px" height="64px" />
@@ -32,17 +32,17 @@ export function ScoreCard({ scoreData }: { scoreData: DailyEyeScore | null }) {
   const riskLabel = scoreData.riskLevel;
 
   return (
-    <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)' }} className="p-6 rounded-2xl flex flex-col items-center gap-4 h-full justify-center">
-      <h3 className="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em]">Today's eye score</h3>
+    <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px' }} className="p-6 flex flex-col items-center gap-4 h-full justify-center">
+      <h3 style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 600 }}>Today's eye score</h3>
       
       <div className="flex flex-col items-center gap-2">
         <div style={{ 
-          fontSize: '64px', fontWeight: 700, lineHeight: 1,
-          color: score >= 75 ? 'var(--green-text)' : score >= 50 ? 'var(--amber-text)' : 'var(--red-text)'
+          fontSize: '48px', fontWeight: 700, lineHeight: 1,
+          color: score >= 75 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444'
         }}>
           {score}
         </div>
-        <span className={`badge ${getBadgeStyle(riskLabel)}`} style={{ fontSize: '12px', padding: '4px 12px' }}>
+        <span style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '9999px', fontWeight: 500, background: score >= 75 ? '#dcfce7' : score >= 50 ? '#fef3c7' : '#fee2e2', color: score >= 75 ? '#166534' : score >= 50 ? '#92400e' : '#991b1b' }}>
           {riskLabel.charAt(0).toUpperCase() + riskLabel.slice(1)} Risk
         </span>
       </div>
@@ -64,7 +64,7 @@ function SkeletonBox({ width, height }: { width: string; height: string }) {
       style={{ 
         width, 
         height, 
-        background: 'var(--border)',
+        background: '#e5e7eb',
         animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
       }} 
     />
@@ -87,12 +87,12 @@ function MiniMetric({ label, value, color }: { label: string, value: number, col
   const pct = (value / 25) * 100;
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-white/30">
+      <div className="flex justify-between" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 500 }}>
         <span>{label}</span>
-        <span style={{ color: 'var(--text-secondary)' }}>{Math.round(value)}</span>
+        <span style={{ color: '#374151', fontWeight: 600 }}>{Math.round(value)}</span>
       </div>
-      <div style={{ background: 'var(--border)' }} className="h-1 rounded-full overflow-hidden">
-        <div className="h-full" style={{ width: `${pct}%`, background: color, transition: "width 1s ease-out" }} />
+      <div style={{ background: '#e5e7eb', height: '4px', borderRadius: '2px', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: color, transition: "width 0.3s ease-out" }} />
       </div>
     </div>
   );

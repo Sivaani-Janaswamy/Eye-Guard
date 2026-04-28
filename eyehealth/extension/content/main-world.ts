@@ -39,6 +39,23 @@ let cameraActive = false;
   const APPROX_FOCAL = 550;
   const EAR_THRESHOLD = 0.21;
 
+  function getBoundingBox(landmarks: any[]) {
+    const xs = landmarks.map(p => p.x);
+    const ys = landmarks.map(p => p.y);
+
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY
+    };
+  }
+
   function computeAmbientLux(): number {
     if (!videoElement || !lightingCtx || videoElement.readyState < 2) return Math.round(smoothedLux || lastLux);
 
@@ -198,6 +215,8 @@ let cameraActive = false;
 
       const lux = computeAmbientLux();
 
+      const bbox = landmarks ? getBoundingBox(landmarks) : null;
+
       const frame = {
         type: 'EYEGUARD_FRAME',
         payload: {
@@ -206,9 +225,10 @@ let cameraActive = false;
           blinkRate: blinkRate,
           ambientLuxLevel: lux,
           isLowLight: lux < 50,
-          confidence: 0, // removed fake confidence
+          confidence: 0,
           timestamp: now,
-          landmarks: landmarks ? landmarks.map(pt => [pt.x, pt.y, pt.z ?? 0]) : []
+          landmarks: landmarks ? landmarks.map(pt => [pt.x, pt.y, pt.z ?? 0]) : [],
+          bbox
         }
       };
 

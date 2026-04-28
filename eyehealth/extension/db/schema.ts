@@ -13,6 +13,12 @@ export interface SensorFrame {
   isLowLight: boolean;        // lux < 50
   confidence: number;         // 0.0–1.0, MediaPipe landmark confidence
   landmarks?: number[][];
+  bbox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
 }
 
 export interface SessionRecord {

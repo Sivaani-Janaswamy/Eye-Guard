@@ -17,6 +17,12 @@ interface MessageData {
   blinkRate: number;
   lux: number;
   faceDetected: boolean;
+  bbox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
 }
 
 function CameraTest() {
@@ -26,6 +32,7 @@ function CameraTest() {
   // Real-time data from chrome.runtime messages
   const [realTimeData, setRealTimeData] = useState<MessageData | null>(null);
   const [lastMessageTime, setLastMessageTime] = useState<number>(0);
+  const [bbox, setBbox] = useState<MessageData['bbox']>(null);
   
   // IndexedDB fallback
   const liveStats = useLiveQuery<LiveStats | null>(
@@ -64,12 +71,26 @@ function CameraTest() {
     return '#3b82f6';
   };
 
+  // Scale bbox to video size
+  function scaleBbox(bbox: MessageData['bbox'], videoWidth: number, videoHeight: number) {
+    if (!bbox) return null;
+    return {
+      left: bbox.x * videoWidth,
+      top: bbox.y * videoHeight,
+      width: bbox.width * videoWidth,
+      height: bbox.height * videoHeight
+    };
+  }
+
   // Message listener for real-time updates
   useEffect(() => {
     const listener = (message: any, _sender: any, _sendResponse: any) => {
       if (message.type === 'LIVE_STATS' && message.data) {
+        console.log('[CameraTest] LIVE_STATS received:', message.data);
+        console.log('[CameraTest] bbox in message:', message.data.bbox);
         setRealTimeData(message.data);
         setLastMessageTime(Date.now());
+        setBbox(message.data.bbox || null);
       }
     };
     
@@ -193,20 +214,26 @@ function CameraTest() {
             />
             
             {/* Bounding Box */}
-            {camStatus === 'on' && (
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: '200px',
-                height: '200px',
-                border: `3px solid ${faceDetected ? '#22c55e' : '#ef4444'}`,
-                borderRadius: '8px',
-                transition: 'border-color 0.3s ease',
-                pointerEvents: 'none'
-              }} />
-            )}
+            {camStatus === 'on' && (() => {
+              const videoEl = videoRef.current;
+              const scaledBox = bbox && videoEl
+                ? scaleBbox(bbox, videoEl.clientWidth, videoEl.clientHeight)
+                : null;
+              console.log('[CameraTest] Rendering bbox:', { bbox, videoEl, scaledBox });
+              return scaledBox && (
+                <div style={{
+                  position: 'absolute',
+                  left: scaledBox.left,
+                  top: scaledBox.top,
+                  width: scaledBox.width,
+                  height: scaledBox.height,
+                  border: `2px solid ${faceDetected ? '#22c55e' : '#ef4444'}`,
+                  borderRadius: '8px',
+                  transition: 'all 0.1s linear',
+                  pointerEvents: 'none'
+                }} />
+              );
+            })()}
             
             {/* Distance Overlay */}
             {camStatus === 'on' && currentData && (

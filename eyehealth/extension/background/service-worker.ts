@@ -552,14 +552,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         confidence: frame.confidence || 0,
         landmarks: lastLandmarks,
         durationMs: durationMs,
-        updatedAt: now
+        updatedAt: now,
+        bbox: frame.bbox || null
       };
 
       const alerts = evaluateAlerts(liveStatsPayload);
       
-      // Remove all chrome.runtime.sendMessage for camera stats - use Dexie only
-      // LIVE_CAMERA_STATS and SESSION_UPDATE messages removed
-      // Only keep LIVE_STATS_UPDATE for overlay (content script)
+      // Send LIVE_STATS to dashboard (real-time updates)
+      chrome.runtime.sendMessage({
+        type: 'LIVE_STATS',
+        data: {
+          distance: liveStatsPayload.distanceCm,
+          blinkRate: liveStatsPayload.blinkRate,
+          lux: liveStatsPayload.lux,
+          faceDetected: liveStatsPayload.faceDetected,
+          bbox: liveStatsPayload.bbox
+        }
+      }).catch(() => {});
       
       // Send alerts to overlay only
       if (sender.tab?.id) {
@@ -647,6 +656,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       sendResponse({ ok: true });
+    })();
+
+    return true;
+  }
+
+  if (message.type === 'COMPUTE_SCORE') {
+    (async () => {
+      try {
+        if (!db.isOpen()) await db.open();
+        
+        const tzOffset = new Date().getTimezoneOffset() * 60000;
+        const todayString = new Date(Date.now() - tzOffset).toISOString().split('T')[0];
+        
+        const sessions = await db.sessions
+          .where('startTime')
+          .above(Date.now() - 86400000)
+          .toArray();
+        
+        if (sessions.length === 0) {
+          sendResponse({ success: false, error: 'No sessions today' });
+          return;
+        }
+        
+        const score = scoreEngine.computeDailyScore(sessions, todayString);
+        await db.scores.put(score);
+        
+        console.log('[EyeGuard:SW] Score computed:', score);
+        sendResponse({ success: true, score });
+      } catch (err) {
+        console.error('[EyeGuard:SW] COMPUTE_SCORE error:', err);
+        sendResponse({ success: false, error: (err as Error).message });
+      }
     })();
 
     return true;

@@ -123,97 +123,97 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-8 flex flex-col gap-8">
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '16px 32px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      <header style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">EyeGuard Dashboard</h1>
-          <p className="text-white/50 text-sm mt-1">
+          <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#111827', letterSpacing: '-0.025em' }}>EyeGuard Dashboard</h1>
+          <p style={{ color: '#6b7280', fontSize: '14px', marginTop: '4px' }}>
             Holistic tracking map for optical longevity. 
-            (Distance: <span className="text-indigo-400 font-mono">{liveDistance}</span>
-            {activeSession && <> | Session: <span className="text-indigo-400 font-mono">{formatTime(sessionTimeMs)}</span></>})
+            (Distance: <span style={{ color: '#3b82f6', fontFamily: 'monospace' }}>{liveDistance}</span>
+            {activeSession && <> | Session: <span style={{ color: '#3b82f6', fontFamily: 'monospace' }}>{formatTime(sessionTimeMs)}</span></>})
           </p>
-          <span className="text-xs text-indigo-400 font-mono">Build: 2026-04-19</span>
+          <span style={{ fontSize: '12px', color: '#3b82f6', fontFamily: 'monospace' }}>Build: 2026-04-19</span>
         </div>
         {isDemoData && (
-          <div className="bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-semibold text-xs px-4 py-2 rounded-full flex items-center gap-2">
-             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', fontSize: '12px', fontWeight: 600, padding: '8px 16px', borderRadius: '9999px', display: 'flex', alignItems: 'center', gap: '8px', width: 'fit-content' }}>
+             <span style={{ display: 'flex', width: '8px', height: '8px' }}>
+              <span style={{ animation: 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite', position: 'absolute', display: 'inline-flex', width: '100%', height: '100%', borderRadius: '50%', background: '#3b82f6', opacity: 0.75 }}></span>
+              <span style={{ position: 'relative', display: 'inline-flex', borderRadius: '50%', width: '8px', height: '8px', background: '#3b82f6' }}></span>
             </span>
             Demo data — Tracking loop is currently inactive
           </div>
         )}
       </header>
       {/* Diagnostics Panel - Always Visible */}
-      <section className="mb-4">
+      <section style={{ marginBottom: '16px' }}>
         <CameraTest />
       </section>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gap: '32px' }}>
         {/* Left Column: Immediate status & Predictions */}
-        <div className="lg:col-span-4 flex flex-col gap-8">
-          <div className="h-auto">
+        <div style={{ gridColumn: 'span 4', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          <div style={{ height: 'auto' }}>
              <ScoreCard scoreData={displayScore} />
           </div>
-          <div className="h-auto">
+          <div style={{ height: 'auto' }}>
              {prediction && <PredictionCard prediction={prediction} />}
           </div>
         </div>
         {/* Center / Right Column: Deep data & Overrides */}
-        <div className="lg:col-span-8 flex flex-col gap-8">
+        <div style={{ gridColumn: 'span 8', display: 'flex', flexDirection: 'column', gap: '32px' }}>
           {/* Top Section: Charts */}
-          <div className="flex flex-col glassmorphism p-6 rounded-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white/50 text-xs font-semibold uppercase tracking-wider">30-day eye score history</h3>
-              <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs rounded">Avg: {Math.round(displayHistory.reduce((a,b)=>a+b.score,0)/displayHistory.length)}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 600 }}>30-day eye score history</h3>
+              <span style={{ padding: '4px 8px', background: '#fef3c7', color: '#92400e', fontSize: '12px', borderRadius: '6px' }}>Avg: {Math.round(displayHistory.reduce((a,b)=>a+b.score,0)/displayHistory.length)}</span>
             </div>
-            <div className="h-[240px]">
+            <div style={{ height: '240px' }}>
               <TrendChart scores={displayHistory} />
             </div>
-            <div className="text-[11px] text-white/30 text-center mt-3 italic">Connect extension to see real-time data flow</div>
+            <div style={{ fontSize: '11px', color: '#9ca3af', textAlign: 'center', marginTop: '12px', fontStyle: 'italic' }}>Connect extension to see real-time data flow</div>
           </div>
           
           {/* Metrics Grid 2x2 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="metric-card">
-              <div className="metric-label">Live Distance</div>
-              <div className="metric-value">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 500, marginBottom: '8px' }}>Live Distance</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#111827' }}>
                 {liveStats?.distanceCm ? `${Math.round(liveStats.distanceCm)} cm` : '—'}
               </div>
-              <div className={`text-[11px] mt-1 font-medium ${liveStats?.distanceCm && liveStats.distanceCm >= 50 && liveStats.distanceCm <= 70 ? 'text-green-400' : 'text-amber-400'}`}>
+              <div style={{ fontSize: '11px', marginTop: '4px', fontWeight: 500, color: liveStats?.distanceCm && liveStats.distanceCm >= 50 && liveStats.distanceCm <= 70 ? '#22c55e' : '#f59e0b' }}>
                 {liveStats?.distanceCm ? (liveStats.distanceCm >= 50 && liveStats.distanceCm <= 70 ? 'Optimal range' : 'Aim for 50-70cm') : 'No data'}
               </div>
             </div>
-            <div className="metric-card">
-              <div className="metric-label">Live Blink Rate</div>
-              <div className="metric-value">
+            <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 500, marginBottom: '8px' }}>Live Blink Rate</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#111827' }}>
                 {liveStats?.blinkRate ? `${Math.round(liveStats.blinkRate)}/min` : '—'}
               </div>
-              <div className={`text-[11px] mt-1 font-medium ${liveStats?.blinkRate && liveStats.blinkRate >= 15 ? 'text-green-400' : 'text-amber-400'}`}>
+              <div style={{ fontSize: '11px', marginTop: '4px', fontWeight: 500, color: liveStats?.blinkRate && liveStats.blinkRate >= 15 ? '#22c55e' : '#f59e0b' }}>
                 {liveStats?.blinkRate ? (liveStats.blinkRate >= 15 ? 'Healthy rate' : 'Aim for 15+/min') : 'No data'}
               </div>
             </div>
-            <div className="metric-card">
-              <div className="metric-label">Ambient Light</div>
-              <div className="metric-value">
+            <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 500, marginBottom: '8px' }}>Ambient Light</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#111827' }}>
                 {liveStats?.lux ? `${Math.round(liveStats.lux)} lux` : '—'}
               </div>
-              <div className={`text-[11px] mt-1 font-medium ${liveStats?.lux && liveStats.lux >= 200 ? 'text-green-400' : liveStats?.lux && liveStats.lux < 50 ? 'text-red-400' : 'text-amber-400'}`}>
+              <div style={{ fontSize: '11px', marginTop: '4px', fontWeight: 500, color: liveStats?.lux && liveStats.lux >= 200 ? '#22c55e' : liveStats?.lux && liveStats.lux < 50 ? '#ef4444' : '#f59e0b' }}>
                 {liveStats?.lux ? (liveStats.lux >= 200 ? 'Good lighting' : liveStats.lux < 50 ? 'Too dim' : 'Aim for 200+ lux') : 'No data'}
               </div>
             </div>
-            <div className="metric-card">
-              <div className="metric-label">Face Detected</div>
-              <div className="metric-value">
+            <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 500, marginBottom: '8px' }}>Face Detected</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#111827' }}>
                 {liveStats?.faceDetected ? 'Yes' : liveStats ? 'No' : '—'}
               </div>
-              <div className={`text-[11px] mt-1 font-medium ${liveStats?.faceDetected ? 'text-green-400' : 'text-amber-400'}`}>
+              <div style={{ fontSize: '11px', marginTop: '4px', fontWeight: 500, color: liveStats?.faceDetected ? '#22c55e' : '#f59e0b' }}>
                 {liveStats?.faceDetected ? 'Tracking active' : liveStats ? 'Move into view' : 'No data'}
               </div>
             </div>
           </div>
 
           {/* Bottom Section: Feed and Controls split */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-auto">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '32px', height: 'auto' }}>
             <AlertFeed alerts={displayAlerts} />
             <CorrectionPanel />
           </div>
