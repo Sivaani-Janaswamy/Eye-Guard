@@ -1,0 +1,1 @@
+[Screenshot pending — Alert toast notification visible on a webpage showing warning message like "You're too close to the screen" with amber accent color, eye icon, and dismiss button. To force this alert, temporarily set distanceThresholdCm to 200 in alert-engine.ts]

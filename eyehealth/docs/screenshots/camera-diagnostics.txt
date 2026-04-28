@@ -1,0 +1,1 @@
+[Screenshot pending — Camera diagnostics panel with 640x480 mirrored video preview showing user's face, Start/Stop Camera button, and 6 metric cards (Distance in cm, Blink rate /min, Lighting in lux, Confidence %, Data age in seconds, Status)]

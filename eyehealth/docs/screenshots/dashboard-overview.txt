@@ -1,0 +1,1 @@
+[Screenshot pending — Full dashboard showing ScoreCard with today's score and risk badge, TrendChart with 30-day score history line graph, PredictionCard with risk forecast and key factors, CameraTest diagnostics panel, live metrics grid (distance, blink rate, lighting, face detected), AlertFeed with recent alerts, and CorrectionPanel with preset buttons]

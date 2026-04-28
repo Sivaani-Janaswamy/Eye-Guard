@@ -1,0 +1,1 @@
+[Screenshot pending — Prediction card showing predicted risk level (Low/Moderate/High) with colored badge, confidence level bar, key factors list (blink rate, distance violations, score trends), recommendation text, and prediction horizon buttons (7/14/30 days)]

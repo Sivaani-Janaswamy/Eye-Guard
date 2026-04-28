@@ -1,0 +1,1 @@
+[Screenshot pending — Night mode correction applied to a webpage showing warmer tones with reduced blue light, increased contrast, and the EyeGuard HUD visible. The page should have a yellowish/warm tint from the CSS invert filter with media protection]

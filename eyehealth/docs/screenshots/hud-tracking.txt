@@ -1,0 +1,1 @@
+[Screenshot pending — EyeGuard HUD overlay on a webpage (Wikipedia or similar) showing draggable toast with EyeGuard title, current distance in cm, health status message, and minimize button. Status should show "Tracking Active" or "EyeGuard Alert" with appropriate color accent]
