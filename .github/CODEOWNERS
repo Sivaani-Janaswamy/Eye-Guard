@@ -1,0 +1,29 @@
+# This file controls who is the default owner for files in the repository.
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owners - will be the default for any file that doesn't have a more specific owner
+* @your-username
+
+# Core extension files
+eyehealth/extension/background/ @your-username
+eyehealth/extension/content/ @your-username
+eyehealth/extension/cv/ @your-username
+eyehealth/extension/engine/ @your-username
+eyehealth/extension/prediction/ @your-username
+eyehealth/extension/correction/ @your-username
+
+# Dashboard files
+eyehealth/dashboard/src/ @your-username
+
+# Documentation
+*.md @your-username
+docs/ @your-username
+
+# Configuration files
+*.json @your-username
+*.config.* @your-username
+.github/ @your-username
+
+# Tests
+tests/ @your-username
+**/*.test.* @your-username

@@ -516,6 +516,78 @@ EyeGuard is designed with privacy as a core principle. All computer vision proce
 
 ---
 
+## Troubleshooting FAQ
+
+### 🔧 Installation Issues
+
+**Q: Extension won't load in Chrome**
+- Ensure you're loading the `eyehealth/extension` folder, not the parent directory
+- Check that Chrome version is 120+ (for Manifest V3 support)
+- Try disabling other extensions temporarily
+
+**Q: Dashboard shows "Connecting to EyeGuard Engine..."**
+- The extension needs to be actively running on a webpage
+- Open any website and wait 30 seconds for MediaPipe to load
+- Check that camera permission was granted
+
+**Q: Build fails with TypeScript errors**
+- Run `npm install` in both dashboard and extension directories
+- Check Node.js version (18+ required)
+- Delete `node_modules` and reinstall if needed
+
+### 📊 Monitoring Issues
+
+**Q: Distance shows "No data" or incorrect values**
+- Ensure good lighting and face is clearly visible
+- Sit at normal desk distance (40-80cm works best)
+- Glasses may affect accuracy by ±5-8cm
+- Avoid extreme head angles (>15° from frontal)
+
+**Q: Blink rate shows 0 or "Searching..."**
+- Wait 10-15 seconds for blink detection to stabilize
+- Ensure both eyes are visible to the camera
+- Very bright backlighting can interfere with detection
+
+**Q: Alerts aren't appearing**
+- Check that alerts aren't disabled in settings
+- Verify cooldown periods haven't been reached
+- Maximum 20 alerts per hour (anti-annoyance feature)
+
+### 🎨 Display Issues
+
+**Q: HUD overlay not visible on some websites**
+- Some sites block overlays with CSS
+- Try refreshing the page
+- Check that EyeGuard has camera permission
+
+**Q: Dark mode toggle not working**
+- Ensure the website doesn't force light mode
+- Try toggling after page fully loads
+- Some sites override CSS filters
+
+### 🔒 Privacy & Security
+
+**Q: Is my camera data being sent anywhere?**
+- **No** - All processing happens on-device
+- Raw frames are never stored or transmitted
+- Only scalar metrics (distance, blink rate, lux) are saved locally
+
+**Q: How do I delete my data?**
+- Open extension popup → Settings → Clear Data
+- Or remove the extension entirely
+
+### ⚡ Performance Issues
+
+**Q: Extension is slowing down my browser**
+- EyeGuard uses ~2-3% CPU on modern computers
+- Try closing other unused tabs
+- Disable if using older hardware
+
+**Q: Battery drain on laptop**
+- Camera usage does consume battery
+- Use pause button when not needed
+- Close dashboard when not actively monitoring
+
 ## Known Issues & Limitations
 
 ### Current Limitations
@@ -568,25 +640,68 @@ See STATUS.md (project root) for the latest bug fixes and audit results.
 
 ## Contributing
 
-```bash
-# Fork and clone
-git clone https://github.com/[your-username]/EyeGuard
-cd EyeGuard/eyehealth
+We welcome contributions from the community! EyeGuard is a privacy-first eye health monitoring system that helps people protect their vision while using digital devices.
 
-# Create feature branch
-git checkout -b feature/your-feature-name
+### 🚀 Quick Start for Contributors
 
-# Build order (always dashboard first)
-cd dashboard && npm run build
-cd ../extension && npm run build:ext
+1. **Fork and clone**
+   ```bash
+   git clone https://github.com/[your-username]/EyeGuard
+   cd EyeGuard/eyehealth
+   ```
 
-# Load extension in Chrome for testing
-# chrome://extensions → Load unpacked → select extension/
+2. **Create feature branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
 
-# Before submitting PR, verify:
-cd extension && npx tsc --noEmit   # no TypeScript errors
-cd dashboard && npx tsc --noEmit  # no TypeScript errors
-```
+3. **Build order (always dashboard first)**
+   ```bash
+   cd dashboard && npm run build
+   cd ../extension && npm run build:ext
+   ```
+
+4. **Load extension in Chrome for testing**
+   - Open `chrome://extensions`
+   - Enable "Developer mode"
+   - Click "Load unpacked"
+   - Select `eyehealth/extension`
+
+5. **Before submitting PR, verify:**
+   ```bash
+   cd extension && npx tsc --noEmit   # no TypeScript errors
+   cd dashboard && npx tsc --noEmit  # no TypeScript errors
+   ```
+
+### 📋 Contribution Guidelines
+
+- **Privacy First**: Never store or transmit raw camera frames or face landmarks
+- **TypeScript**: All new code must be typed
+- **Documentation**: Update README for user-facing changes
+- **Testing**: Test both dashboard and extension functionality
+- **Code Style**: Follow existing patterns and conventions
+
+### 🏷️ Issue Labels
+
+- `good first issue`: Perfect for newcomers
+- `help wanted`: Community assistance needed
+- `bug`: Something isn't working correctly
+- `enhancement`: New feature or improvement
+- `documentation`: Docs, README, or guides
+
+### 📚 Resources for Contributors
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Detailed contribution guide
+- [BEGINNER_ISSUES.md](BEGINNER_ISSUES.md) - Starter issues for newcomers
+- [Architecture Overview](#architecture) - System design
+- [Privacy Rules](#privacy-architecture) - Data handling requirements
+
+### 🤝 Getting Help
+
+- Ask questions in GitHub issues
+- Check existing documentation
+- Review similar issues or PRs
+- Join our discussions (coming soon)
 
 ### Module Ownership
 
