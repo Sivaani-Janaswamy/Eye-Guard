@@ -297,7 +297,7 @@ function CameraTest() {
               borderRadius: '8px' 
             }}>
               <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', marginBottom: '4px' }}>Blink Rate</div>
-              <div style={{ fontSize: '24px', fontWeight: 600, color: currentData?.blinkRate >= 15 ? '#22c55e' : '#f59e0b' }}>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: (currentData?.blinkRate ?? 0) >= 15 ? '#22c55e' : '#f59e0b' }}>
                 {currentData ? Math.round(currentData.blinkRate) : '—'}
               </div>
               {currentData && <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>/min</div>}
@@ -311,7 +311,7 @@ function CameraTest() {
               borderRadius: '8px' 
             }}>
               <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', marginBottom: '4px' }}>Lighting</div>
-              <div style={{ fontSize: '24px', fontWeight: 600, color: currentData?.lux >= 50 ? '#22c55e' : '#f59e0b' }}>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: (currentData?.lux ?? 0) >= 50 ? '#22c55e' : '#f59e0b' }}>
                 {currentData ? Math.round(currentData.lux) : '—'}
               </div>
               {currentData && <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>lux</div>}
