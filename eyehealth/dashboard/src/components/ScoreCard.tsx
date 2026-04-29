@@ -35,14 +35,50 @@ export function ScoreCard({ scoreData }: { scoreData: DailyEyeScore | null }) {
     <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px' }} className="p-6 flex flex-col items-center gap-4 h-full justify-center">
       <h3 style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 600 }}>Today's eye score</h3>
       
-      <div className="flex flex-col items-center gap-2">
-        <div style={{ 
-          fontSize: '48px', fontWeight: 700, lineHeight: 1,
-          color: score >= 75 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444'
+      {/* Enhanced Score Display with Circular Progress */}
+      <div className="flex flex-col items-center gap-4">
+        <div style={{
+          width: '120px',
+          height: '120px',
+          borderRadius: '50%',
+          background: `conic-gradient(${score >= 75 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444'} 0deg ${score * 3.6}deg, #e5e7eb ${score * 3.6}deg 360deg)`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          transition: 'all 0.3s ease'
         }}>
-          {score}
+          <div style={{
+            width: '100px',
+            height: '100px',
+            borderRadius: '50%',
+            background: 'white',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <div style={{ 
+              fontSize: '28px', 
+              fontWeight: 'bold', 
+              color: score >= 75 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444',
+              lineHeight: 1
+            }}>
+              {score}
+            </div>
+            <div style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Score</div>
+          </div>
         </div>
-        <span style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '9999px', fontWeight: 500, background: score >= 75 ? '#dcfce7' : score >= 50 ? '#fef3c7' : '#fee2e2', color: score >= 75 ? '#166534' : score >= 50 ? '#92400e' : '#991b1b' }}>
+        <span style={{ 
+          fontSize: '12px', 
+          padding: '6px 16px', 
+          borderRadius: '20px', 
+          fontWeight: 600, 
+          background: score >= 75 ? '#dcfce7' : score >= 50 ? '#fef3c7' : '#fee2e2', 
+          color: score >= 75 ? '#166534' : score >= 50 ? '#92400e' : '#991b1b',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px'
+        }}>
           {riskLabel.charAt(0).toUpperCase() + riskLabel.slice(1)} Risk
         </span>
       </div>
