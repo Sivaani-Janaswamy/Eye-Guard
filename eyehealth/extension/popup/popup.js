@@ -27775,8 +27775,8 @@
               setActivePreset(correctionProfileObj.activePreset);
             }
             const settings = await chrome.storage.local.get(["theme", "isMonitoring"]);
-            if (settings.theme) setTheme(settings.theme);
-            if (settings.isMonitoring !== void 0) setIsMonitoring(settings.isMonitoring);
+            if (settings.theme && (settings.theme === "light" || settings.theme === "dark")) setTheme(settings.theme);
+            if (typeof settings.isMonitoring === "boolean") setIsMonitoring(settings.isMonitoring);
             const lastLive = await db.live_stats.get(1);
             if (lastLive) {
               setLiveStats((prev) => ({

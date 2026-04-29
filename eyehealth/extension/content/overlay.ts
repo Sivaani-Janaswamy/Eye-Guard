@@ -47,7 +47,7 @@ function getSafeEyeIcon(): string {
   const eyeIcon = chrome.runtime.getURL('assets/eye.png');
   // Prevent infinite onerror loops with unique ID
   const fallbackId = 'eg-eye-fallback';
-  return `<img src="${eyeIcon}" alt="EyeGuard" onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', '<span style=\'font-size: 24px;\'>👁️</span>');" />`;
+  return `<img class="eg-eye-icon" src="${eyeIcon}" alt="EyeGuard" onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', '<span class=\'eg-eye-icon\' style=\'font-size: 24px;\'>👁️</span>');" />`;
 }
 
 
@@ -623,8 +623,7 @@ function updateWebsiteTheme(): void {
           filter: invert(0.9) hue-rotate(180deg) !important;
           background: #fff !important;
         }
-        img, video, iframe, canvas,
-        .eg-unified-toast,
+        img:not(.eg-eye-icon), video, iframe, canvas,
         [style*="background-image"] {
           filter: invert(1.1) hue-rotate(180deg) !important;
         }
