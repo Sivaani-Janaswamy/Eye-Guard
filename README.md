@@ -660,9 +660,9 @@ See STATUS.md (project root) for the latest bug fixes and audit results.
 
 ## Contributing
 
-We welcome contributions from the community! EyeGuard is a privacy-first eye health monitoring system that helps people protect their vision while using digital devices.
+We welcome contributions! EyeGuard is a privacy-first eye health monitoring system.
 
-### 🚀 Quick Start for Contributors
+### 🚀 Quick Start
 
 1. **Fork and clone**
    ```bash
@@ -670,58 +670,35 @@ We welcome contributions from the community! EyeGuard is a privacy-first eye hea
    cd EyeGuard/eyehealth
    ```
 
-2. **Create feature branch**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-3. **Build order (always dashboard first)**
+2. **Build and test**
    ```bash
    cd dashboard && npm run build
    cd ../extension && npm run build:ext
    ```
 
-4. **Load extension in Chrome for testing**
+3. **Load extension**
    - Open `chrome://extensions`
-   - Enable "Developer mode"
-   - Click "Load unpacked"
+   - Enable "Developer mode" → "Load unpacked"
    - Select `eyehealth/extension`
 
-5. **Before submitting PR, verify:**
-   ```bash
-   cd extension && npx tsc --noEmit   # no TypeScript errors
-   cd dashboard && npx tsc --noEmit  # no TypeScript errors
-   ```
+### 📋 Guidelines
 
-### 📋 Contribution Guidelines
+- **Privacy First**: Never store/transmit raw camera data
+- **TypeScript**: All code must be typed
+- **Test**: Verify both dashboard and extension work
+- **Document**: Update README for user-facing changes
 
-- **Privacy First**: Never store or transmit raw camera frames or face landmarks
-- **TypeScript**: All new code must be typed
-- **Documentation**: Update README for user-facing changes
-- **Testing**: Test both dashboard and extension functionality
-- **Code Style**: Follow existing patterns and conventions
+### � Resources
 
-### 🏷️ Issue Labels
-
-- `good first issue`: Perfect for newcomers
-- `help wanted`: Community assistance needed
-- `bug`: Something isn't working correctly
-- `enhancement`: New feature or improvement
-- `documentation`: Docs, README, or guides
-
-### 📚 Resources for Contributors
-
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Detailed contribution guide
-- [BEGINNER_ISSUES.md](BEGINNER_ISSUES.md) - Starter issues for newcomers
-- [Architecture Overview](#architecture) - System design
-- [Privacy Rules](#privacy-architecture) - Data handling requirements
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Detailed guide
+- [BEGINNER_ISSUES.md](BEGINNER_ISSUES.md) - Starter issues
+- [Good First Issues](https://github.com/Sivaani-Janaswamy/Eye-Guard/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) - Beginner-friendly tasks
 
 ### 🤝 Getting Help
 
 - Ask questions in GitHub issues
 - Check existing documentation
-- Review similar issues or PRs
-- Join our discussions (coming soon)
+- Review similar PRs
 
 ### Module Ownership
 
