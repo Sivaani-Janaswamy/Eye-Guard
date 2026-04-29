@@ -124,251 +124,15 @@ export default function Dashboard() {
 
   return (
     <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '16px 32px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      {/* Hero Section with Personalization */}
-      <div style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        borderRadius: '16px',
-        padding: '32px',
-        color: 'white',
-        marginBottom: '16px'
-      }}>
-        <h2 style={{ fontSize: '24px', marginBottom: '8px' }}>
-          Welcome back! 👋
-        </h2>
-        <p style={{ fontSize: '16px', opacity: 0.9, marginBottom: '16px' }}>
-          Your eye health score today is <strong>{displayScore?.score || 0}/100</strong>
-        </p>
-        <div style={{ display: 'flex', gap: '16px', fontSize: '14px', flexWrap: 'wrap' }}>
-          <span>🔥 {activeSession ? 'Active session' : 'Start monitoring'}</span>
-          <span>📊 {history.length} days tracked</span>
-          <span>⏱️ {formatTime(sessionTimeMs)} today</span>
-          <span>👁️ Distance: {liveDistance}</span>
-        </div>
-      </div>
-
-      {/* Quick Actions Section */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '16px',
-        marginBottom: '24px'
-      }}>
-        <button 
-          onClick={() => {
-            // Start session action
-            chrome.runtime.sendMessage({ action: 'startMonitoring' });
-          }}
-          style={{
-            background: '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '16px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '500',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-          onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-        >
-          🚀 Start Session
-        </button>
-        <button 
-          onClick={() => {
-            // View report action
-            window.print();
-          }}
-          style={{
-            background: '#10b981',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '16px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '500',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-          onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-        >
-          📊 View Report
-        </button>
-        <button 
-          onClick={() => {
-            // Settings action
-            chrome.runtime.openOptionsPage();
-          }}
-          style={{
-            background: '#f59e0b',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '16px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '500',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-          onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-        >
-          ⚙️ Settings
-        </button>
-        <button 
-          onClick={() => {
-            // Mobile app action
-            window.open('https://github.com/Sivaani-Janaswamy/Eye-Guard', '_blank');
-          }}
-          style={{
-            background: '#8b5cf6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '16px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '500',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-          onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-        >
-          📱 Mobile App
-        </button>
-      </div>
-
-      {/* Weekly Insights Card */}
-      <div style={{
-        background: '#fef3c7',
-        border: '1px solid #f59e0b',
-        borderRadius: '12px',
-        padding: '20px',
-        marginBottom: '24px'
-      }}>
-        <h3 style={{ color: '#92400e', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          💡 Weekly Insight
-        </h3>
-        <p style={{ color: '#78350f', lineHeight: '1.5' }}>
-          {displayScore?.score >= 80 
-            ? "Excellent eye health this week! Keep maintaining your healthy screen habits."
-            : displayScore?.score >= 60
-            ? "Your screen distance has improved by 15% this week! Keep maintaining the 50-70cm optimal range for better eye health."
-            : "Let's focus on improving your eye health this week. Try taking more breaks and maintaining better screen distance."
-          }
-        </p>
-        <div style={{ marginTop: '12px', fontSize: '12px', color: '#92400e' }}>
-          Based on your last 7 days of data
-        </div>
-      </div>
-
-      {/* Achievement Badges */}
-      <div style={{
-        background: 'white',
-        border: '1px solid #e5e7eb',
-        borderRadius: '12px',
-        padding: '20px',
-        marginBottom: '24px'
-      }}>
-        <h3 style={{ marginBottom: '16px', fontSize: '16px', color: '#111827' }}>🏆 Achievements</h3>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          {history.length >= 7 && (
-            <div style={{
-              background: '#dcfce7',
-              color: '#166534',
-              padding: '8px 12px',
-              borderRadius: '20px',
-              fontSize: '12px',
-              fontWeight: '500'
-            }}>
-              ✅ 7-Day Streak
-            </div>
-          )}
-          {displayScore?.score >= 80 && (
-            <div style={{
-              background: '#dbeafe',
-              color: '#1e40af',
-              padding: '8px 12px',
-              borderRadius: '20px',
-              fontSize: '12px',
-              fontWeight: '500'
-            }}>
-              👁️ Eye Health Pro
-            </div>
-          )}
-          {history.length >= 30 && (
-            <div style={{
-              background: '#f3e8ff',
-              color: '#6b21a8',
-              padding: '8px 12px',
-              borderRadius: '20px',
-              fontSize: '12px',
-              fontWeight: '500'
-            }}>
-              📊 Data Lover
-            </div>
-          )}
-          {activeSession && (
-            <div style={{
-              background: '#fee2e2',
-              color: '#991b1b',
-              padding: '8px 12px',
-              borderRadius: '20px',
-              fontSize: '12px',
-              fontWeight: '500'
-            }}>
-              🔥 Active Monitor
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Health Tips Carousel */}
-      <div style={{
-        background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
-        borderRadius: '12px',
-        padding: '20px',
-        color: 'white',
-        marginBottom: '24px'
-      }}>
-        <h3 style={{ marginBottom: '12px' }}>💬 Health Tip</h3>
-        <p style={{ lineHeight: '1.5', marginBottom: '12px' }}>
-          Did you know? The 20-20-20 rule: Every 20 minutes, look at something 20 feet away for 20 seconds to reduce eye strain.
-        </p>
-        <button 
-          onClick={() => {
-            // Rotate through tips
-            const tips = [
-              "Did you know? The 20-20-20 rule: Every 20 minutes, look at something 20 feet away for 20 seconds to reduce eye strain.",
-              "Proper lighting is crucial! Position your screen to avoid glare and ensure ambient lighting is adequate.",
-              "Blink more! People blink 66% less when using computers, which can cause dry eyes.",
-              "Screen distance matters! Keep your monitor at arm's length (about 25 inches or 63cm from your eyes)."
-            ];
-            // Simple tip rotation (in real app, would use state)
-            console.log("Next tip clicked");
-          }}
-          style={{
-            background: 'rgba(255,255,255,0.2)',
-            border: '1px solid rgba(255,255,255,0.3)',
-            color: 'white',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.3)'}
-          onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
-        >
-          Next Tip →
-        </button>
-      </div>
-
-      {/* Original Header (simplified) */}
+      {/* Original Header */}
       <header style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#ffffff', letterSpacing: '-0.025em' }}>EyeGuard Dashboard</h1>
+          <p style={{ color: '#ffffff', fontSize: '14px', marginTop: '4px' }}>
+            Holistic tracking map for optical longevity. 
+            (Distance: <span style={{ color: '#fcd34d', fontFamily: 'monospace' }}>{liveDistance}</span>
+            {activeSession && <> | Session: <span style={{ color: '#fcd34d', fontFamily: 'monospace' }}>{formatTime(sessionTimeMs)}</span></>})
+          </p>
           <span style={{ fontSize: '12px', color: '#fcd34d', fontFamily: 'monospace' }}>Build: 2026-04-19</span>
         </div>
       </header>
@@ -400,172 +164,41 @@ export default function Dashboard() {
             <div style={{ fontSize: '11px', color: '#9ca3af', textAlign: 'center', marginTop: '12px', fontStyle: 'italic' }}>Connect extension to see real-time data flow</div>
           </div>
           
-          {/* Enhanced Metrics Grid 2x2 */}
+          {/* Metrics Grid 2x2 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
-            <div 
-              style={{ 
-                background: '#ffffff', 
-                border: '1px solid #e5e7eb', 
-                borderRadius: '12px', 
-                padding: '20px',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              <div style={{ position: 'absolute', top: '8px', right: '8px', fontSize: '20px' }}>
-                📏
-              </div>
+            <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px' }}>
               <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 500, marginBottom: '8px' }}>Live Distance</div>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: '#111827', marginBottom: '4px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#111827' }}>
                 {liveStats?.distanceCm ? `${Math.round(liveStats.distanceCm)} cm` : '—'}
               </div>
-              <div style={{ 
-                fontSize: '12px', 
-                fontWeight: 500, 
-                color: liveStats?.distanceCm && liveStats.distanceCm >= 50 && liveStats.distanceCm <= 70 ? '#22c55e' : '#f59e0b',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}>
-                <span style={{ fontSize: '10px' }}>
-                  {liveStats?.distanceCm && liveStats.distanceCm >= 50 && liveStats.distanceCm <= 70 ? '✓' : '⚠️'}
-                </span>
+              <div style={{ fontSize: '11px', marginTop: '4px', fontWeight: 500, color: liveStats?.distanceCm && liveStats.distanceCm >= 50 && liveStats.distanceCm <= 70 ? '#22c55e' : '#f59e0b' }}>
                 {liveStats?.distanceCm ? (liveStats.distanceCm >= 50 && liveStats.distanceCm <= 70 ? 'Optimal range' : 'Aim for 50-70cm') : 'No data'}
               </div>
             </div>
-            
-            <div 
-              style={{ 
-                background: '#ffffff', 
-                border: '1px solid #e5e7eb', 
-                borderRadius: '12px', 
-                padding: '20px',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              <div style={{ position: 'absolute', top: '8px', right: '8px', fontSize: '20px' }}>
-                👁️
-              </div>
+            <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px' }}>
               <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 500, marginBottom: '8px' }}>Live Blink Rate</div>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: '#111827', marginBottom: '4px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#111827' }}>
                 {liveStats?.blinkRate ? `${Math.round(liveStats.blinkRate)}/min` : '—'}
               </div>
-              <div style={{ 
-                fontSize: '12px', 
-                fontWeight: 500, 
-                color: liveStats?.blinkRate && liveStats.blinkRate >= 15 ? '#22c55e' : '#f59e0b',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}>
-                <span style={{ fontSize: '10px' }}>
-                  {liveStats?.blinkRate && liveStats.blinkRate >= 15 ? '✓' : '⚠️'}
-                </span>
+              <div style={{ fontSize: '11px', marginTop: '4px', fontWeight: 500, color: liveStats?.blinkRate && liveStats.blinkRate >= 15 ? '#22c55e' : '#f59e0b' }}>
                 {liveStats?.blinkRate ? (liveStats.blinkRate >= 15 ? 'Healthy rate' : 'Aim for 15+/min') : 'No data'}
               </div>
             </div>
-            
-            <div 
-              style={{ 
-                background: '#ffffff', 
-                border: '1px solid #e5e7eb', 
-                borderRadius: '12px', 
-                padding: '20px',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              <div style={{ position: 'absolute', top: '8px', right: '8px', fontSize: '20px' }}>
-                💡
-              </div>
+            <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px' }}>
               <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 500, marginBottom: '8px' }}>Ambient Light</div>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: '#111827', marginBottom: '4px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#111827' }}>
                 {liveStats?.lux ? `${Math.round(liveStats.lux)} lux` : '—'}
               </div>
-              <div style={{ 
-                fontSize: '12px', 
-                fontWeight: 500, 
-                color: liveStats?.lux && liveStats.lux >= 200 ? '#22c55e' : liveStats?.lux && liveStats.lux < 50 ? '#ef4444' : '#f59e0b',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}>
-                <span style={{ fontSize: '10px' }}>
-                  {liveStats?.lux && liveStats.lux >= 200 ? '✓' : liveStats?.lux && liveStats.lux < 50 ? '⚠️' : '⚠️'}
-                </span>
+              <div style={{ fontSize: '11px', marginTop: '4px', fontWeight: 500, color: liveStats?.lux && liveStats.lux >= 200 ? '#22c55e' : liveStats?.lux && liveStats.lux < 50 ? '#ef4444' : '#f59e0b' }}>
                 {liveStats?.lux ? (liveStats.lux >= 200 ? 'Good lighting' : liveStats.lux < 50 ? 'Too dim' : 'Aim for 200+ lux') : 'No data'}
               </div>
             </div>
-            
-            <div 
-              style={{ 
-                background: '#ffffff', 
-                border: '1px solid #e5e7eb', 
-                borderRadius: '12px', 
-                padding: '20px',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              <div style={{ position: 'absolute', top: '8px', right: '8px', fontSize: '20px' }}>
-                🎭
-              </div>
-              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 500, marginBottom: '8px' }}>Face Detection</div>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: '#111827', marginBottom: '4px' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', fontWeight: 500, marginBottom: '8px' }}>Face Detected</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#111827' }}>
                 {liveStats?.faceDetected ? 'Yes' : liveStats ? 'No' : '—'}
               </div>
-              <div style={{ 
-                fontSize: '12px', 
-                fontWeight: 500, 
-                color: liveStats?.faceDetected ? '#22c55e' : '#f59e0b',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}>
-                <span style={{ fontSize: '10px' }}>
-                  {liveStats?.faceDetected ? '✓' : liveStats ? '⚠️' : '⚠️'}
-                </span>
+              <div style={{ fontSize: '11px', marginTop: '4px', fontWeight: 500, color: liveStats?.faceDetected ? '#22c55e' : '#f59e0b' }}>
                 {liveStats?.faceDetected ? 'Tracking active' : liveStats ? 'Move into view' : 'No data'}
               </div>
             </div>
@@ -575,6 +208,167 @@ export default function Dashboard() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '32px', height: 'auto' }}>
             <AlertFeed alerts={displayAlerts} />
             <CorrectionPanel />
+          </div>
+        </div>
+      </div>
+
+      {/* Unified Insights Component - Matching existing design */}
+      <div style={{ 
+        background: '#ffffff', 
+        border: '1px solid #e5e7eb', 
+        borderRadius: '12px', 
+        padding: '24px',
+        marginTop: '32px'
+      }}>
+        <div style={{ 
+          fontSize: '11px', 
+          textTransform: 'uppercase', 
+          letterSpacing: '0.05em', 
+          color: '#6b7280', 
+          fontWeight: 600, 
+          marginBottom: '16px' 
+        }}>
+          Health Insights & Achievements
+        </div>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
+          {/* Weekly Insight */}
+          <div style={{ 
+            background: '#fffbeb', 
+            border: '1px solid #fcd34d', 
+            borderRadius: '8px', 
+            padding: '16px' 
+          }}>
+            <div style={{ 
+              fontSize: '12px', 
+              fontWeight: 600, 
+              color: '#92400e', 
+              marginBottom: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              💡 Weekly Insight
+            </div>
+            <p style={{ 
+              fontSize: '13px', 
+              color: '#78350f', 
+              lineHeight: '1.4',
+              margin: 0 
+            }}>
+              {displayScore?.score >= 80 
+                ? "Excellent eye health this week! Keep maintaining your healthy screen habits."
+                : displayScore?.score >= 60
+                ? "Your screen distance has improved by 15% this week! Keep maintaining the 50-70cm optimal range."
+                : "Let's focus on improving your eye health this week. Try taking more breaks and maintaining better screen distance."
+              }
+            </p>
+            <div style={{ 
+              fontSize: '11px', 
+              color: '#92400e', 
+              marginTop: '8px',
+              fontStyle: 'italic'
+            }}>
+              Based on your last 7 days of data
+            </div>
+          </div>
+
+          {/* Achievements */}
+          <div style={{ 
+            background: '#f0fdf4', 
+            border: '1px solid #86efac', 
+            borderRadius: '8px', 
+            padding: '16px' 
+          }}>
+            <div style={{ 
+              fontSize: '12px', 
+              fontWeight: 600, 
+              color: '#166534', 
+              marginBottom: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              🏆 Achievements
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {history.length >= 7 && (
+                <span style={{
+                  background: '#dcfce7',
+                  color: '#166534',
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: '500'
+                }}>
+                  ✅ 7-Day Streak
+                </span>
+              )}
+              {displayScore?.score >= 80 && (
+                <span style={{
+                  background: '#dbeafe',
+                  color: '#1e40af',
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: '500'
+                }}>
+                  👁️ Eye Health Pro
+                </span>
+              )}
+              {history.length >= 30 && (
+                <span style={{
+                  background: '#f3e8ff',
+                  color: '#6b21a8',
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: '500'
+                }}>
+                  📊 Data Lover
+                </span>
+              )}
+              {activeSession && (
+                <span style={{
+                  background: '#fee2e2',
+                  color: '#991b1b',
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: '500'
+                }}>
+                  🔥 Active Monitor
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Health Tip */}
+          <div style={{ 
+            background: '#f0f9ff', 
+            border: '1px solid #7dd3fc', 
+            borderRadius: '8px', 
+            padding: '16px' 
+          }}>
+            <div style={{ 
+              fontSize: '12px', 
+              fontWeight: 600, 
+              color: '#1e40af', 
+              marginBottom: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              💬 Health Tip
+            </div>
+            <p style={{ 
+              fontSize: '13px', 
+              color: '#1e3a8a', 
+              lineHeight: '1.4',
+              margin: 0 
+            }}>
+              Did you know? The 20-20-20 rule: Every 20 minutes, look at something 20 feet away for 20 seconds to reduce eye strain.
+            </p>
           </div>
         </div>
       </div>
