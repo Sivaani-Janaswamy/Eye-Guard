@@ -636,13 +636,22 @@ See STATUS.md (project root) for the latest bug fixes and audit results.
 
 ## Roadmap
 
-### v1.1 (Current Sprint)
-- [x] Simplify CameraTest component (remove FaceMesh dependency)
-- [x] Fix APPROX_FOCAL constant (600 → 550)
-- [x] Remove production console.log statements
-- [x] Add skeleton loading states
+### v1.5.0 (Current Release - Dashboard Enhancement)
+- [x] Enhanced dashboard with hero section and personalization
+- [x] Added quick actions section with functional buttons
+- [x] Implemented circular progress indicators for score cards
+- [x] Added weekly insights card with dynamic content
+- [x] Created achievement badges system
+- [x] Added health tips carousel
+- [x] Enhanced metrics grid with hover effects and micro-interactions
+- [x] Fixed TypeScript compilation errors
+- [x] Improved visual design and user experience
+
+### v1.6 (Next Sprint)
 - [ ] Add CorrectionPanel → extension message bridge
 - [ ] Comprehensive CSP compliance audit
+- [ ] Firefox extension port
+- [ ] Unit tests for core algorithms
 
 ### v2.0 (Next Major)
 - [ ] Android native app (Kotlin + CameraX)

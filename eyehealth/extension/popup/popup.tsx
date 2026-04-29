@@ -47,8 +47,8 @@ function Popup() {
       }
 
       const settings = await chrome.storage.local.get(["theme", "isMonitoring"]);
-      if (settings.theme) setTheme(settings.theme);
-      if (settings.isMonitoring !== undefined) setIsMonitoring(settings.isMonitoring);
+      if (settings.theme && (settings.theme === "light" || settings.theme === "dark")) setTheme(settings.theme);
+      if (typeof settings.isMonitoring === "boolean") setIsMonitoring(settings.isMonitoring);
       
       // Pre-load last live stats to avoid flicker
       const lastLive = await db.live_stats.get(1);
