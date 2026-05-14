@@ -12,7 +12,7 @@ function Popup() {
   const [activePreset, setActivePreset] = useState("off");
   const [hasConsent, setHasConsent] = useState<boolean | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  
+
   // Real-time Live Stats
   const [liveStats, setLiveStats] = useState({
     distanceCm: 0, blinkRate: 0, lux: 0, faceDetected: false, durationMs: 0,
@@ -28,7 +28,7 @@ function Popup() {
       const tzOffset = new Date().getTimezoneOffset() * 60000;
       const todayString = new Date(Date.now() - tzOffset).toISOString().split("T")[0];
       const todayScoreArr = await db.scores.where("date").equals(todayString).toArray();
-      
+
       // Initial Load
       if (todayScoreArr.length > 0) {
         setScoreData(todayScoreArr[0]);
@@ -49,7 +49,7 @@ function Popup() {
       const settings = await chrome.storage.local.get(["theme", "isMonitoring"]);
       if (settings.theme && (settings.theme === "light" || settings.theme === "dark")) setTheme(settings.theme);
       if (typeof settings.isMonitoring === "boolean") setIsMonitoring(settings.isMonitoring);
-      
+
       // Pre-load last live stats to avoid flicker
       const lastLive = await db.live_stats.get(1);
       if (lastLive) {
@@ -126,7 +126,7 @@ function Popup() {
     await db.correction.put({ id: 1, ...profileObj });
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) {
-        chrome.tabs.sendMessage(tabs[0].id, { type: "APPLY_CORRECTION", profile: profileObj }).catch(() => {});
+        chrome.tabs.sendMessage(tabs[0].id, { type: "APPLY_CORRECTION", profile: profileObj }).catch(() => { });
       }
     });
   };
@@ -137,7 +137,7 @@ function Popup() {
     chrome.storage.local.set({ theme: newTheme });
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach(tab => {
-        if (tab.id) chrome.tabs.sendMessage(tab.id, { type: "THEME_CHANGED", theme: newTheme }).catch(() => {});
+        if (tab.id) chrome.tabs.sendMessage(tab.id, { type: "THEME_CHANGED", theme: newTheme }).catch(() => { });
       });
     });
   };
@@ -149,7 +149,7 @@ function Popup() {
   const totalDurationMs = scoreData?.totalDurationMs || 0;
   const hasData = scoreData !== null && totalDurationMs > 5000;
   const score = scoreData?.score || 0;
-  
+
   const riskClass = score >= 75 ? "score-green" : score >= 50 ? "score-amber" : "score-red";
   const badgeClass = score >= 75 ? "badge-green" : score >= 50 ? "badge-amber" : "badge-red";
   const riskLabel = score >= 75 ? "Low risk" : score >= 50 ? "Moderate risk" : "High risk";
@@ -187,7 +187,7 @@ function Popup() {
               </>
             ) : (
               <div className="no-data-msg">
-                {!isMonitoring ? "Start monitoring to see your score." : 
+                {!isMonitoring ? "Start monitoring to see your score." :
                   totalDurationMs < 5000 ? "Collecting data..." : "Collecting reliable data..."}
               </div>
             )}
@@ -207,33 +207,33 @@ function Popup() {
           <>
             <div className="section-title">Today's Averages</div>
             <div className={!hasData ? "breakdown-disabled" : ""}>
-              <ProgressItem 
-                label="Avg. Screen time (today)" 
-                score={bd.screenTimeScore} 
+              <ProgressItem
+                label="Avg. Screen time (today)"
+                score={bd.screenTimeScore}
                 rawValue={formatHours(scoreData?.totalScreenMinutes || 0)}
                 ideal="Ideal: < 6h/day"
-                color="var(--amber-text)" 
+                color="var(--amber-text)"
               />
-              <ProgressItem 
-                label="Avg. Distance (today)" 
-                score={bd.distanceScore} 
+              <ProgressItem
+                label="Avg. Distance (today)"
+                score={bd.distanceScore}
                 rawValue={`${Math.round(scoreData?.avgDistanceCm || 0)} cm`}
                 ideal="Ideal: 50–70 cm"
-                color="var(--green-text)" 
+                color="var(--green-text)"
               />
-              <ProgressItem 
-                label="Avg. Blink rate (today)" 
-                score={bd.blinkScore} 
+              <ProgressItem
+                label="Avg. Blink rate (today)"
+                score={bd.blinkScore}
                 rawValue={`${(scoreData?.avgBlinkRate || 0).toFixed(1)}/min`}
                 ideal="Ideal: 15–20 blinks/min"
-                color="var(--red-text)" 
+                color="var(--red-text)"
               />
-              <ProgressItem 
-                label="Avg. Lighting (today)" 
-                score={bd.lightingScore} 
+              <ProgressItem
+                label="Avg. Lighting (today)"
+                score={bd.lightingScore}
                 rawValue={`${Math.round(scoreData?.avgLux || 0)} lux (${getLuxLabel(scoreData?.avgLux || 0)})`}
                 ideal="Ideal: 200–500 lux"
-                color="var(--green-text)" 
+                color="var(--green-text)"
               />
             </div>
 
@@ -243,7 +243,7 @@ function Popup() {
                 <span className="stat-icon">⏱️</span>
                 <span className="stat-val">{formatTime(liveStats.durationMs)}</span>
               </div>
-              
+
               <div className="stat-item">
                 <span className="stat-icon">👀</span>
                 <span className="stat-val">
@@ -291,8 +291,8 @@ function Popup() {
   );
 }
 
-function ProgressItem({ label, score, rawValue, ideal, color }: { 
-  label: string, score: number, rawValue: string, ideal: string, color: string 
+function ProgressItem({ label, score, rawValue, ideal, color }: {
+  label: string, score: number, rawValue: string, ideal: string, color: string
 }) {
   return (
     <div className="bar-row-complex">
@@ -340,6 +340,26 @@ function SettingsPanel({ onBack }: { onBack: () => void }) {
           </div>
           <input type="range" min="10" max="200" defaultValue="50" style={{ width: "100%" }} />
         </div>
+        <div style={{ border: "1px solid var(--border)", borderRadius: "12px", padding: "12px", marginTop: "8px", background: "var(--card-bg)" }}>
+          <div style={{ fontWeight: 600, marginBottom: "10px" }}>
+            Keyboard Shortcuts ⌨️
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span>Toggle monitoring</span>
+            <span>Ctrl + Shift + E</span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span>Open dashboard</span>
+            <span>Ctrl + Shift + D</span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Pause/resume alerts</span>
+            <span>Ctrl + Shift + P</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -351,20 +371,20 @@ function ConsentScreen({ onAllow }: { onAllow: () => void }) {
       <div className="ext-body" style={{ textAlign: "center", padding: "24px 20px" }}>
         <div className="onboard-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="8" r="4" stroke="#185FA5" stroke-width="1.5"/>
-            <ellipse cx="12" cy="8" rx="2" ry="4" stroke="#185FA5" stroke-width="1"/>
-            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#185FA5" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="12" cy="8" r="4" stroke="#185FA5" stroke-width="1.5" />
+            <ellipse cx="12" cy="8" rx="2" ry="4" stroke="#185FA5" stroke-width="1" />
+            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#185FA5" stroke-width="1.5" stroke-linecap="round" />
           </svg>
         </div>
         <div className="onboard-title">EyeGuard needs camera access</div>
         <div className="onboard-sub">Used only to measure your blink rate and screen distance. No video is ever recorded or sent anywhere — all processing happens on your device.</div>
-        
+
         <div className="privacy-card">
           <div className="privacy-title">What stays on your device</div>
           <div className="privacy-lines">
-            Raw camera frames — never stored<br/>
-            Face landmarks — used briefly, then discarded<br/>
-            Blink rate, distance — stored locally only<br/>
+            Raw camera frames — never stored<br />
+            Face landmarks — used briefly, then discarded<br />
+            Blink rate, distance — stored locally only<br />
             Daily eye score — yours alone
           </div>
         </div>
