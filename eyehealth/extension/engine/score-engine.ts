@@ -2,6 +2,41 @@ import { db } from "../db/db";
 import { DailyEyeScore, SessionRecord } from "../db/schema";
 
 /**
+ * Constants used in the EyeGuard scoring algorithm.
+ */
+const SCORING_CONSTANTS = {
+  /** Maximum score assigned per health component */
+  MAX_SCORE_PER_COMPONENT: 25,
+
+  /** Penalty rate applied for excessive screen time */
+  SCREEN_TIME_PENALTY_RATE: 4.17,
+
+  /** Minimum healthy viewing distance in centimeters */
+  MIN_DISTANCE_CM: 30,
+
+  /** Ideal viewing distance in centimeters */
+  MAX_DISTANCE_CM: 60,
+
+  /** Minimum acceptable blink rate per minute */
+  MIN_BLINK_RATE: 5,
+
+  /** Target healthy blink rate per minute */
+  TARGET_BLINK_RATE: 15,
+
+  /** Minimum acceptable lighting level in lux */
+  MIN_LUX: 20,
+
+  /** Ideal lighting level in lux */
+  TARGET_LUX: 200,
+  
+  /** Minimum score required for low risk classification */
+  LOW_RISK_THRESHOLD: 75,
+
+  /** Minimum score required for moderate risk classification */
+  MODERATE_RISK_THRESHOLD: 50,
+};
+
+/**
  * Bounds a value between the given minimum and maximum limit.
  */
 function clamp(val: number, min: number, max: number): number {
@@ -51,20 +86,24 @@ export class ScoreEngine {
     const avgBlink = weightedAvg(sessions, "avgBlinkRate");
     const avgLux = weightedAvg(sessions, "avgLuxLevel");
 
-    // Screen time: 25pts. Full score <= 6h. Zero at >= 12h.
-    const screenTimeScore = clamp(25 - Math.max(0, (totalMins / 60 - 6)) * 4.17, 0, 25);
+    // Screen time scoring: maximum score awarded for healthy usage durations,
+    // with the score gradually decreasing beyond the recommended limit.
+    const screenTimeScore = clamp(SCORING_CONSTANTS.MAX_SCORE_PER_COMPONENT - Math.max(0, totalMins / 60 - 6) * SCORING_CONSTANTS.SCREEN_TIME_PENALTY_RATE, 0, SCORING_CONSTANTS.MAX_SCORE_PER_COMPONENT);
+    
+    // Distance scoring: maximum score awarded for maintaining a healthy
+    // viewing distance, with lower scores for closer screen distances.
+    const distanceScore = clamp(((avgDist - SCORING_CONSTANTS.MIN_DISTANCE_CM) / (SCORING_CONSTANTS.MAX_DISTANCE_CM - SCORING_CONSTANTS.MIN_DISTANCE_CM)) * SCORING_CONSTANTS.MAX_SCORE_PER_COMPONENT, 0, SCORING_CONSTANTS.MAX_SCORE_PER_COMPONENT);
 
-    // Distance: 25pts. Full score >= 60cm. Zero at <= 30cm.
-    const distanceScore = clamp((avgDist - 30) / 30 * 25, 0, 25);
-
-    // Blink rate: 25pts. Full score >= 15 bpm. Zero at <= 5 bpm.
-    const blinkScore = clamp((avgBlink - 5) / 10 * 25, 0, 25);
-
-    // Lighting: 25pts. Full score at lux >= 200. Zero at lux <= 20.
-    const lightingScore = clamp((avgLux - 20) / 180 * 25, 0, 25);
+    // Blink rate scoring: maximum score awarded for maintaining a healthy
+    // blink frequency, with reduced scores for lower blink rates.
+    const blinkScore = clamp(((avgBlink - SCORING_CONSTANTS.MIN_BLINK_RATE) / (SCORING_CONSTANTS.TARGET_BLINK_RATE - SCORING_CONSTANTS.MIN_BLINK_RATE)) * SCORING_CONSTANTS.MAX_SCORE_PER_COMPONENT, 0, SCORING_CONSTANTS.MAX_SCORE_PER_COMPONENT);
+    
+    // Lighting scoring: maximum score awarded under healthy ambient lighting
+    // conditions, with reduced scores in low-light environments.
+    const lightingScore = clamp(((avgLux - SCORING_CONSTANTS.MIN_LUX) / (SCORING_CONSTANTS.TARGET_LUX - SCORING_CONSTANTS.MIN_LUX)) * SCORING_CONSTANTS.MAX_SCORE_PER_COMPONENT, 0, SCORING_CONSTANTS.MAX_SCORE_PER_COMPONENT);
 
     const score = Math.round(screenTimeScore + distanceScore + blinkScore + lightingScore);
-    const riskLevel: "low" | "moderate" | "high" = score >= 75 ? "low" : score >= 50 ? "moderate" : "high";
+    const riskLevel: "low" | "moderate" | "high" = score >= SCORING_CONSTANTS.LOW_RISK_THRESHOLD ? "low" : score >= SCORING_CONSTANTS.MODERATE_RISK_THRESHOLD ? "moderate" : "high";
     const myopiaRiskFlag = false; // Resolved correctly dynamically when persisting/fetching via DB context.
 
     return {
@@ -127,7 +166,7 @@ export class ScoreEngine {
     }
     
     for (let i = 0; i < Math.min(recentScores.length, 3); i++) {
-       if (recentScores[i].score < 50) {
+       if (recentScores[i].score < SCORING_CONSTANTS.MODERATE_RISK_THRESHOLD) {
           consecutiveHighRisk++;
        } else {
           break; // Broken streak
