@@ -142,7 +142,17 @@ function Popup() {
     });
   };
 
-  if (hasConsent === null) return null;
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (hasConsent !== null) {
+      // Brief delay so the skeleton is perceivable even on fast loads
+      const timer = setTimeout(() => setIsLoading(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [hasConsent]);
+
+  if (hasConsent === null || isLoading) return <LoadingSkeleton />;
   if (!hasConsent) return <ConsentScreen onAllow={handleGrantConsent} />;
 
   // Readiness Signal: use totalDurationMs directly from unrounded engine data
@@ -340,6 +350,41 @@ function SettingsPanel({ onBack }: { onBack: () => void }) {
           </div>
           <input type="range" min="10" max="200" defaultValue="50" style={{ width: "100%" }} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+function LoadingSkeleton() {
+  return (
+    <div className="ext-popup">
+      <div className="skeleton-header">
+        <div className="skeleton skeleton-title"></div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div className="skeleton skeleton-score-circle"></div>
+          <div className="skeleton skeleton-badge" style={{ marginTop: "8px" }}></div>
+        </div>
+        <div className="skeleton" style={{ width: "130px", height: "10px", margin: "8px auto 0" }}></div>
+      </div>
+      <div className="skeleton-body">
+        <div className="skeleton skeleton-section-title"></div>
+        {[1,2,3,4].map(i => (
+          <div key={i} className="skeleton skeleton-bar-row"></div>
+        ))}
+        <div className="skeleton skeleton-section-title" style={{ marginTop: "8px" }}></div>
+        <div className="skeleton-stat-row">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="skeleton skeleton-stat"></div>
+          ))}
+        </div>
+        <div className="skeleton" style={{ width: "140px", height: "10px", margin: "4px 0 8px" }}></div>
+        <div className="skeleton-preset-row">
+          {[1,2,3].map(i => (
+            <div key={i} className="skeleton skeleton-preset"></div>
+          ))}
+        </div>
+        <div className="skeleton skeleton-btn"></div>
       </div>
     </div>
   );
