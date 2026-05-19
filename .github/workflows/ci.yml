@@ -13,10 +13,13 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: |
+            eyehealth/dashboard/package-lock.json
+            eyehealth/extension/package-lock.json
     
     - name: Install dashboard dependencies
       run: |
