@@ -31,10 +31,12 @@ export function CorrectionPanel() {
     const newProfile = { ...profile, [key]: value, activePreset: "custom" as const };
     setProfile(newProfile);
     await db.correction.put(newProfile);
-    chrome.runtime.sendMessage({
-      type: 'APPLY_CORRECTION',
-      profile: newProfile
-    });
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.sendMessage({
+        type: 'APPLY_CORRECTION',
+        profile: newProfile
+      });
+    }
   };
 
   const handlePreset = async (presetId: "off" | "office" | "night") => {
@@ -42,10 +44,12 @@ export function CorrectionPanel() {
     const newProfile = { ...profile, ...CORRECTION_PRESETS[presetId] };
     setProfile(newProfile);
     await db.correction.put(newProfile);
-    chrome.runtime.sendMessage({
-      type: 'APPLY_CORRECTION',
-      profile: newProfile
-    });
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.sendMessage({
+        type: 'APPLY_CORRECTION',
+        profile: newProfile
+      });
+    }
     setAppliedPreset(presetId);
   };
 
