@@ -1,0 +1,32 @@
+[
+  {
+    "id": "load-extension",
+    "question": "How do I load the EyeGuard extension?",
+    "answer": "Open `chrome://extensions` in Chrome, enable **Developer mode** (top-right), click **Load unpacked**, and select the `eyehealth/extension` folder."
+  },
+  {
+    "id": "enable-monitoring",
+    "question": "How do I enable monitoring and camera permissions?",
+    "answer": "Open any regular website (e.g., `google.com`) in a tab. Click the EyeGuard extension icon in your Chrome toolbar, complete the privacy consent, allow camera access, and ensure monitoring is toggled **ON**."
+  },
+  {
+    "id": "seed-database",
+    "question": "I loaded the extension but it still won't connect or show data?",
+    "answer": "EyeGuard requires active monitoring to seed your database. Please keep a regular website tab open (not this dashboard page itself) for at least 30 seconds so the extension's face tracker can start, create a tracking session, and write real metrics to the database."
+  },
+  {
+    "id": "no-sessions-today",
+    "question": "Why does score computation fail with 'No sessions today'?",
+    "answer": "The dashboard calculates daily scores from face-tracking sessions recorded today. If you haven't visited any web pages today with the extension active, there will be no sessions. Open a standard webpage (e.g., `youtube.com`) for a few minutes to record your first session."
+  },
+  {
+    "id": "camera-diagnostics-error",
+    "question": "Why is the camera preview not starting or showing an error?",
+    "answer": "Ensure that (1) your computer has a working camera connected, (2) camera permissions are allowed for this origin in browser settings, and (3) no other application (like Zoom or Teams) is currently using the camera."
+  },
+  {
+    "id": "demo-mode-bypass",
+    "question": "Can I run the dashboard without the extension?",
+    "answer": "Yes! If you are developing or testing, click **Try Demo Mode** on the warning screen. This will simulate real-time metrics and allow you to view the dashboard and mock scores."
+  }
+]

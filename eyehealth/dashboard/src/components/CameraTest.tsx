@@ -28,6 +28,7 @@ interface MessageData {
 function CameraTest() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [camStatus, setCamStatus] = useState<'off' | 'starting' | 'on'>('off');
+  const [camError, setCamError] = useState<string>('');
   
   // Real-time data from chrome.runtime messages
   const [realTimeData, setRealTimeData] = useState<MessageData | null>(null);
@@ -94,12 +95,12 @@ function CameraTest() {
       }
     };
     
-    if (chrome.runtime?.onMessage) {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       chrome.runtime.onMessage.addListener(listener);
     }
     
     return () => {
-      if (chrome.runtime?.onMessage) {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
         chrome.runtime.onMessage.removeListener(listener);
       }
     };
@@ -108,6 +109,7 @@ function CameraTest() {
   // Camera start
   const startCamera = useCallback(async () => {
     setCamStatus('starting');
+    setCamError('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480 }
@@ -120,6 +122,16 @@ function CameraTest() {
     } catch (err) {
       console.error('[CameraTest] Failed to start camera:', err);
       setCamStatus('off');
+      let friendlyError = 'Failed to access camera. Please check your browser permissions.';
+      const errName = (err as Error).name;
+      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+        friendlyError = 'Camera access denied. Please click the camera icon in your browser address bar and allow access to this site.';
+      } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+        friendlyError = 'No camera hardware detected. Please connect a webcam and try again.';
+      } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+        friendlyError = 'Camera is already in use by another application (e.g. Zoom, Teams, Discord). Please close other camera apps and try again.';
+      }
+      setCamError(friendlyError);
     }
   }, []);
 
@@ -131,32 +143,71 @@ function CameraTest() {
       video.srcObject = null;
     }
     setCamStatus('off');
+    setCamError('');
   }, []);
 
   // Manual score computation
   const computeScore = useCallback(async () => {
     setScoreComputing(true);
     setScoreResult('');
+    
+    // Check if we are running without the Chrome extension
+    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
+      // In demo mode/development, we simulate score computation locally
+      try {
+        const demoScoreVal = Math.floor(Math.random() * 20 + 75); // random score 75-95
+        const todayString = new Date().toISOString().split('T')[0];
+        
+        // Write the mock score to local IndexedDB so the charts and cards update reactively
+        await db.scores.put({
+          date: todayString,
+          score: demoScoreVal,
+          breakdown: { screenTimeScore: 8, distanceScore: 9, blinkScore: 7, lightingScore: 9 },
+          riskLevel: "low" as const,
+          myopiaRiskFlag: false,
+          totalScreenMinutes: 120,
+          avgDistanceCm: 55,
+          avgBlinkRate: 15,
+          avgLux: 150,
+          totalDurationMs: 120 * 60000
+        });
+        
+        setScoreResult(`🧪 Demo Mode: Computed mock score of ${demoScoreVal}/100 and updated local charts.`);
+      } catch (err) {
+        setScoreResult('⚠️ Demo Mode Error: Failed to write mock score to database: ' + (err as Error).message);
+      } finally {
+        setScoreComputing(false);
+      }
+      return;
+    }
+    
     let timeout = setTimeout(() => {
-      setScoreResult('No response from service worker');
+      setScoreResult('⚠️ No response from the extension service worker. Try restarting the extension.');
       setScoreComputing(false);
-    }, 3000);
+    }, 4000);
     
     try {
       await new Promise<void>((resolve) => {
         chrome.runtime.sendMessage({ type: 'COMPUTE_SCORE' }, (response) => {
           clearTimeout(timeout);
           if (response?.success) {
-            setScoreResult('Score computed successfully');
+            const scoreVal = response.score?.score ?? 'N/A';
+            setScoreResult(`✅ Score computed successfully! Today's score: ${scoreVal}/100.`);
           } else {
-            setScoreResult('Failed to compute score');
+            let errorMsg = 'Failed to compute score.';
+            if (response?.error === 'No sessions today') {
+              errorMsg = '⚠️ No monitoring data recorded today yet. Please open a regular website in a new tab (e.g. google.com or youtube.com) and stay on it for at least 30 seconds so the extension can record a tracking session.';
+            } else if (response?.error) {
+              errorMsg = `⚠️ Error from extension: ${response.error}`;
+            }
+            setScoreResult(errorMsg);
           }
           resolve();
         });
       });
     } catch (err) {
       clearTimeout(timeout);
-      setScoreResult('Error: ' + (err as Error).message);
+      setScoreResult('⚠️ Message Error: Could not connect to extension background script. ' + (err as Error).message);
     } finally {
       setScoreComputing(false);
     }
@@ -179,8 +230,20 @@ function CameraTest() {
         Camera Diagnostics
       </h3>
 
-      {/* Stale data warning */}
-      {dataAge > 5000 && (
+      {/* Dynamic presence warning */}
+      {!(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) ? (
+        <div style={{ 
+          marginBottom: '16px', 
+          padding: '12px', 
+          background: '#fffbeb', 
+          border: '1px solid #fcd34d', 
+          borderRadius: '8px' 
+        }}>
+          <p style={{ fontSize: '13px', color: '#92400e', margin: 0, fontWeight: 500 }}>
+            🧪 Running in Demo Mode (Extension not active). Background monitoring is disabled. You can still test camera capture and simulate scores below.
+          </p>
+        </div>
+      ) : dataAge > 5000 ? (
         <div style={{ 
           marginBottom: '16px', 
           padding: '12px', 
@@ -189,10 +252,10 @@ function CameraTest() {
           borderRadius: '8px' 
         }}>
           <p style={{ fontSize: '13px', color: '#0369a1', margin: 0 }}>
-            Open any webpage — the extension monitors you there and sends data here automatically.
+            ℹ️ Monitoring is active. Open any standard webpage (e.g., google.com or youtube.com) and stay on it for a few seconds to update real-time face metrics here.
           </p>
         </div>
-      )}
+      ) : null}
 
       <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
         {/* Left: Video Preview */}
@@ -255,45 +318,62 @@ function CameraTest() {
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {camStatus === 'off' ? (
-              <button
-                onClick={startCamera}
-                style={{
-                  padding: '8px 16px',
-                  background: '#22c55e',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'background 0.2s'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.background = '#16a34a'}
-                onMouseOut={(e) => e.currentTarget.style.background = '#22c55e'}
-              >
-                Start Camera
-              </button>
-            ) : (
-              <button
-                onClick={stopCamera}
-                style={{
-                  padding: '8px 16px',
-                  background: '#ef4444',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'background 0.2s'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.background = '#dc2626'}
-                onMouseOut={(e) => e.currentTarget.style.background = '#ef4444'}
-              >
-                Stop Camera
-              </button>
+          <div style={{ display: 'flex', gap: '8px', flexDirection: 'column', width: '100%' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {camStatus === 'off' ? (
+                <button
+                  onClick={startCamera}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#22c55e',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.background = '#16a34a'}
+                  onMouseOut={(e) => e.currentTarget.style.background = '#22c55e'}
+                >
+                  Start Camera
+                </button>
+              ) : (
+                <button
+                  onClick={stopCamera}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#ef4444',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.background = '#dc2626'}
+                  onMouseOut={(e) => e.currentTarget.style.background = '#ef4444'}
+                >
+                  Stop Camera
+                </button>
+              )}
+            </div>
+
+            {camError && (
+              <div style={{
+                marginTop: '8px',
+                padding: '10px 12px',
+                background: '#fef2f2',
+                border: '1px solid #fee2e2',
+                borderRadius: '6px',
+                color: '#b91c1c',
+                fontSize: '12px',
+                lineHeight: '1.4'
+              }}>
+                ⚠️ {camError}
+              </div>
             )}
           </div>
         </div>
