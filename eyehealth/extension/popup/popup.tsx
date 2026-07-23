@@ -12,6 +12,7 @@ function Popup() {
   const [activePreset, setActivePreset] = useState("off");
   const [hasConsent, setHasConsent] = useState<boolean | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [isLoading, setIsLoading] = useState(true);
   
   // Real-time Live Stats
   const [liveStats, setLiveStats] = useState({
@@ -21,45 +22,49 @@ function Popup() {
 
   useEffect(() => {
     const loadData = async () => {
-      const consentCount = await db.consent.count();
-      setHasConsent(consentCount > 0);
-      if (consentCount === 0) return;
+      try {
+        const consentCount = await db.consent.count();
+        setHasConsent(consentCount > 0);
+        if (consentCount === 0) return;
 
-      const tzOffset = new Date().getTimezoneOffset() * 60000;
-      const todayString = new Date(Date.now() - tzOffset).toISOString().split("T")[0];
-      const todayScoreArr = await db.scores.where("date").equals(todayString).toArray();
-      
-      // Initial Load
-      if (todayScoreArr.length > 0) {
-        setScoreData(todayScoreArr[0]);
-      } else {
-        setScoreData(null);
-      }
+        const tzOffset = new Date().getTimezoneOffset() * 60000;
+        const todayString = new Date(Date.now() - tzOffset).toISOString().split("T")[0];
+        const todayScoreArr = await db.scores.where("date").equals(todayString).toArray();
+        
+        // Initial Load
+        if (todayScoreArr.length > 0) {
+          setScoreData(todayScoreArr[0]);
+        } else {
+          setScoreData(null);
+        }
 
-      const sessions = await db.sessions.orderBy("startTime").reverse().limit(1).toArray();
-      if (sessions.length > 0 && sessions[0].endTime === null) {
-        setActiveSession(sessions[0]);
-      }
+        const sessions = await db.sessions.orderBy("startTime").reverse().limit(1).toArray();
+        if (sessions.length > 0 && sessions[0].endTime === null) {
+          setActiveSession(sessions[0]);
+        }
 
-      const correctionProfileObj = await db.correction.get(1);
-      if (correctionProfileObj?.activePreset) {
-        setActivePreset(correctionProfileObj.activePreset);
-      }
+        const correctionProfileObj = await db.correction.get(1);
+        if (correctionProfileObj?.activePreset) {
+          setActivePreset(correctionProfileObj.activePreset);
+        }
 
-      const settings = await chrome.storage.local.get(["theme", "isMonitoring"]);
-      if (settings.theme && (settings.theme === "light" || settings.theme === "dark")) setTheme(settings.theme);
-      if (typeof settings.isMonitoring === "boolean") setIsMonitoring(settings.isMonitoring);
-      
-      // Pre-load last live stats to avoid flicker
-      const lastLive = await db.live_stats.get(1);
-      if (lastLive) {
-        setLiveStats(prev => ({
-          ...prev,
-          distanceCm: lastLive.distanceCm,
-          blinkRate: lastLive.blinkRate,
-          lux: lastLive.lux,
-          faceDetected: lastLive.faceDetected
-        }));
+        const settings = await chrome.storage.local.get(["theme", "isMonitoring"]);
+        if (settings.theme && (settings.theme === "light" || settings.theme === "dark")) setTheme(settings.theme);
+        if (typeof settings.isMonitoring === "boolean") setIsMonitoring(settings.isMonitoring);
+        
+        // Pre-load last live stats to avoid flicker
+        const lastLive = await db.live_stats.get(1);
+        if (lastLive) {
+          setLiveStats(prev => ({
+            ...prev,
+            distanceCm: lastLive.distanceCm,
+            blinkRate: lastLive.blinkRate,
+            lux: lastLive.lux,
+            faceDetected: lastLive.faceDetected
+          }));
+        }
+      } finally {
+        setIsLoading(false);
       }
     };
     loadData();
@@ -142,6 +147,7 @@ function Popup() {
     });
   };
 
+  if (isLoading) return <PopupSkeleton theme={theme} />;
   if (hasConsent === null) return null;
   if (!hasConsent) return <ConsentScreen onAllow={handleGrantConsent} />;
 
@@ -286,6 +292,82 @@ function Popup() {
             </button>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function PopupSkeleton({ theme }: { theme: "light" | "dark" }) {
+  const muted = theme === "dark" ? "rgba(255,255,255,0.12)" : "rgba(24,95,165,0.12)";
+  const mutedStrong = theme === "dark" ? "rgba(255,255,255,0.18)" : "rgba(24,95,165,0.18)";
+
+  return (
+    <div className={`ext-popup ${theme === "dark" ? "dark-mode" : ""}`}>
+      <style>{`
+        @keyframes popupSkeletonPulse {
+          0%, 100% { opacity: 0.55; }
+          50% { opacity: 1; }
+        }
+      `}</style>
+      <div className="ext-header">
+        <div className="ext-header-row">
+          <div style={{ width: 90, height: 18, borderRadius: 999, background: mutedStrong, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+          <div className="header-controls" style={{ gap: 8 }}>
+            <div style={{ width: 24, height: 24, borderRadius: 8, background: muted, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+            <div style={{ width: 24, height: 24, borderRadius: 8, background: muted, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+            <div style={{ width: 96, height: 20, borderRadius: 999, background: mutedStrong, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+            <div style={{ width: 34, height: 20, borderRadius: 999, background: mutedStrong, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+          </div>
+        </div>
+
+        <div className="score-section">
+          <div style={{ width: 96, height: 12, borderRadius: 999, background: muted, marginBottom: 12, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+          <div style={{ width: 72, height: 64, borderRadius: 18, background: mutedStrong, margin: "0 auto 10px", animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+          <div style={{ width: 110, height: 20, borderRadius: 999, background: muted, margin: "0 auto", animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+        </div>
+      </div>
+
+      <div className="ext-body">
+        <div style={{ width: 132, height: 14, borderRadius: 999, background: muted, marginBottom: 12, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {[1, 2, 3, 4].map((row) => (
+            <div key={row} className="bar-row-complex" style={{ opacity: 0.9 }}>
+              <div className="bar-header">
+                <div style={{ width: 150, height: 10, borderRadius: 999, background: muted, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+                <div style={{ width: 56, height: 10, borderRadius: 999, background: muted, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+              </div>
+              <div className="bar-track">
+                <div style={{ width: `${25 + row * 14}%`, height: 8, borderRadius: 999, background: mutedStrong, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+              </div>
+              <div className="bar-footer">
+                <div style={{ width: 92, height: 9, borderRadius: 999, background: muted, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+                <div style={{ width: 74, height: 9, borderRadius: 999, background: muted, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ marginTop: 20 }}>
+          <div style={{ width: 160, height: 14, borderRadius: 999, background: muted, marginBottom: 10, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+          <div className="live-stats" style={{ gap: 10 }}>
+            {[1, 2, 3, 4].map((item) => (
+              <div key={item} className="stat-item" style={{ minHeight: 48 }}>
+                <div style={{ width: 18, height: 18, borderRadius: 999, background: mutedStrong, marginRight: 8, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+                <div style={{ width: item === 1 ? 48 : 34, height: 10, borderRadius: 999, background: muted, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16, height: 38, borderRadius: 14, background: mutedStrong, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+
+        <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
+          {[1, 2, 3].map((item) => (
+            <div key={item} style={{ flex: 1, height: 34, borderRadius: 12, background: mutedStrong, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
+          ))}
+        </div>
+
+        <div style={{ marginTop: 14, height: 36, borderRadius: 12, background: mutedStrong, animation: "popupSkeletonPulse 1.4s ease-in-out infinite" }} />
       </div>
     </div>
   );
