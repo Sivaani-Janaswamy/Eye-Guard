@@ -697,7 +697,7 @@ We welcome contributions! EyeGuard is a privacy-first eye health monitoring syst
 - **Test**: Verify both dashboard and extension work
 - **Document**: Update README for user-facing changes
 
-### � Resources
+### 📚 Resources
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Detailed guide
 - [BEGINNER_ISSUES.md](BEGINNER_ISSUES.md) - Starter issues
